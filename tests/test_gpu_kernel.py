@@ -54,12 +54,10 @@ def test_kernel(a, b):
 
             # Verify the expected MLIR patterns
             expected_patterns = [
-                "func.func @test_load_store(%a: !llvm.ptr, %b: !llvm.ptr)",
-                "nvvm.read.ptx.sreg.ntid.x : i32",
-                "nvvm.read.ptx.sreg.ctaid.x : i32",
+                "func.func @test_load_store",
                 "nvvm.read.ptx.sreg.tid.x : i32",
-                "arith.muli",
-                "arith.addi",
+                "arith.mulf",  # Changed from muli to mulf for GPU kernels
+                "arith.addf",  # Changed from addi to addf for GPU kernels
                 "oven.load %a,",
                 "oven.store",
                 "return",

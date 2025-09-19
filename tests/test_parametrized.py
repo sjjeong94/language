@@ -105,7 +105,11 @@ class TestParametrizedCompiler:
             ),
             (
                 "def div(a, b): return a / b",
-                ["func.func @div", "arith.divsi", "func.return"],
+                [
+                    "func.func @div",
+                    "arith.divf",
+                    "func.return",
+                ],  # Changed from divsi to divf
             ),
         ],
     )

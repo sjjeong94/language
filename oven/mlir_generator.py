@@ -262,6 +262,18 @@ class MLIRGenerator:
         self._emit(f"{ssa_val} = nvvm.read.ptx.sreg.tid.x : i32")
         return ssa_val
 
+    def add_gpu_thread_id_y(self) -> str:
+        """Add NVVM read thread ID Y operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = nvvm.read.ptx.sreg.tid.y : i32")
+        return ssa_val
+
+    def add_gpu_block_id_y(self) -> str:
+        """Add NVVM read block ID Y operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = nvvm.read.ptx.sreg.ctaid.y : i32")
+        return ssa_val
+
     def add_gpu_load(self, ptr: str, offset: str, result_type: str = "f32") -> str:
         """Add GPU load operation."""
         ssa_val = self.get_next_ssa_value()
@@ -296,3 +308,99 @@ class MLIRGenerator:
             f"{ssa_val} = oven.sigmoid {operand} : {operand_type} -> {operand_type}"
         )
         return ssa_val
+
+    # Arithmetic operations
+    def add_arith_muli(self, lhs: str, rhs: str, result_type: str = "i32") -> str:
+        """Add integer multiplication operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = arith.muli {lhs}, {rhs} : {result_type}")
+        return ssa_val
+
+    def add_arith_addi(self, lhs: str, rhs: str, result_type: str = "i32") -> str:
+        """Add integer addition operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = arith.addi {lhs}, {rhs} : {result_type}")
+        return ssa_val
+
+    def add_arith_mulf(self, lhs: str, rhs: str, result_type: str = "f32") -> str:
+        """Add floating-point multiplication operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = arith.mulf {lhs}, {rhs} : {result_type}")
+        return ssa_val
+
+    def add_arith_addf(self, lhs: str, rhs: str, result_type: str = "f32") -> str:
+        """Add floating-point addition operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = arith.addf {lhs}, {rhs} : {result_type}")
+        return ssa_val
+
+    def add_arith_subi(self, lhs: str, rhs: str, result_type: str = "i32") -> str:
+        """Add integer subtraction operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = arith.subi {lhs}, {rhs} : {result_type}")
+        return ssa_val
+
+    def add_arith_subf(self, lhs: str, rhs: str, result_type: str = "f32") -> str:
+        """Add floating-point subtraction operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = arith.subf {lhs}, {rhs} : {result_type}")
+        return ssa_val
+
+    def add_arith_divf(self, lhs: str, rhs: str, result_type: str = "f32") -> str:
+        """Add floating-point division operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = arith.divf {lhs}, {rhs} : {result_type}")
+        return ssa_val
+
+    # Type conversion
+    def add_arith_index_cast(self, value: str, from_type: str, to_type: str) -> str:
+        """Add index cast operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = arith.index_cast {value} : {from_type} to {to_type}")
+        return ssa_val
+
+    # Constants for different types
+    def add_constant_index(self, value: int) -> str:
+        """Add an index constant operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = arith.constant {value} : index")
+        return ssa_val
+
+    # Loop operations
+    def add_scf_for(
+        self, start: str, end: str, step: str, iter_args: list = None
+    ) -> str:
+        """Add SCF for loop operation."""
+        if iter_args is None:
+            iter_args = []
+
+        ssa_val = self.get_next_ssa_value()
+        iter_args_str = ", ".join(iter_args) if iter_args else ""
+        iter_types = " -> (f32)" if iter_args else ""
+
+        if iter_args:
+            self._emit(
+                f"{ssa_val} = scf.for {start} = {start} to {end} step {step} iter_args({iter_args_str}){iter_types} {{"
+            )
+        else:
+            self._emit(f"scf.for {start} = {start} to {end} step {step} {{")
+
+        self.indent_level += 1
+        return ssa_val
+
+    def add_scf_yield(self, values: list = None) -> None:
+        """Add SCF yield operation."""
+        if values is None:
+            values = []
+
+        if values:
+            values_str = ", ".join(values)
+            types_str = " : " + ", ".join(["f32"] * len(values))
+            self._emit(f"scf.yield {values_str}{types_str}")
+        else:
+            self._emit("scf.yield")
+
+    def end_scf_for(self) -> None:
+        """End SCF for loop."""
+        self.indent_level -= 1
+        self._emit("}")

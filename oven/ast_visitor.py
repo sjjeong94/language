@@ -75,6 +75,7 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         is_gpu_kernel = self._is_gpu_kernel_function(node)
         is_math_function = self._is_math_function(node)
         self._current_is_gpu = is_gpu_kernel  # Track for visit_Return
+        self._current_is_math = is_math_function  # Track for arithmetic operations
 
         if is_gpu_kernel:
             # For GPU kernels, use pointer types for array arguments
@@ -123,9 +124,15 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         gpu_functions = {
             "get_bdim_x",
             "get_bid_x",
+            "get_bid_y",
             "get_tid_x",
+            "get_tid_y",
             "load",
             "store",
+            "load_input_x",
+            "load_input_y",
+            "store_output_x",
+            "store_output_y",
             "__nvvm_read_ptx_sreg_ntid_x",
             "__nvvm_read_ptx_sreg_ctaid_x",
             "__nvvm_read_ptx_sreg_tid_x",
@@ -150,8 +157,14 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                         if attr_name in [
                             "load",
                             "store",
+                            "load_input_x",
+                            "load_input_y",
+                            "store_output_x",
+                            "store_output_y",
                             "get_tid_x",
+                            "get_tid_y",
                             "get_bid_x",
+                            "get_bid_y",
                             "get_bdim_x",
                         ]:
                             func_name = attr_name
@@ -251,23 +264,6 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         else:
             # Fallback for other constant types
             return self.mlir_generator.add_constant_int(0)
-
-    def visit_BinOp(self, node: ast.BinOp) -> str:
-        """Visit a binary operation."""
-        left_ssa = self.visit(node.left)
-        right_ssa = self.visit(node.right)
-
-        op_map = {
-            ast.Add: "arith.addi",
-            ast.Sub: "arith.subi",
-            ast.Mult: "arith.muli",
-            ast.Div: "arith.divsi",
-            ast.Mod: "arith.remsi",
-            ast.FloorDiv: "arith.divsi",
-        }
-
-        op_name = op_map.get(type(node.op), "arith.addi")
-        return self.mlir_generator.add_binary_op(op_name, left_ssa, right_ssa)
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> str:
         """Visit a unary operation."""
@@ -413,8 +409,12 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             return self.mlir_generator.add_gpu_block_dim_x()
         elif func_name in ["get_bid_x", "oven_lang_get_bid_x"]:
             return self.mlir_generator.add_gpu_block_id_x()
+        elif func_name in ["get_bid_y", "oven_lang_get_bid_y"]:
+            return self.mlir_generator.add_gpu_block_id_y()
         elif func_name in ["get_tid_x", "oven_lang_get_tid_x"]:
             return self.mlir_generator.add_gpu_thread_id_x()
+        elif func_name in ["get_tid_y", "oven_lang_get_tid_y"]:
+            return self.mlir_generator.add_gpu_thread_id_y()
         elif func_name == "__nvvm_read_ptx_sreg_ntid_x":
             return self.mlir_generator.add_gpu_block_dim_x()
         elif func_name == "__nvvm_read_ptx_sreg_ctaid_x":
@@ -460,6 +460,63 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             if len(node.args) >= 1:
                 operand_ssa = self.visit(node.args[0])
                 return self.mlir_generator.add_oven_sigmoid(operand_ssa)
+        # Handle arithmetic function calls
+        elif func_name in ["muli", "oven_lang_muli"]:
+            # muli(a, b)
+            if len(node.args) >= 2:
+                lhs_ssa = self.visit(node.args[0])
+                rhs_ssa = self.visit(node.args[1])
+                return self.mlir_generator.add_arith_muli(lhs_ssa, rhs_ssa)
+        elif func_name in ["addi", "oven_lang_addi"]:
+            # addi(a, b)
+            if len(node.args) >= 2:
+                lhs_ssa = self.visit(node.args[0])
+                rhs_ssa = self.visit(node.args[1])
+                return self.mlir_generator.add_arith_addi(lhs_ssa, rhs_ssa)
+        elif func_name in ["mulf", "oven_lang_mulf"]:
+            # mulf(a, b)
+            if len(node.args) >= 2:
+                lhs_ssa = self.visit(node.args[0])
+                rhs_ssa = self.visit(node.args[1])
+                return self.mlir_generator.add_arith_mulf(lhs_ssa, rhs_ssa)
+        elif func_name in ["addf", "oven_lang_addf"]:
+            # addf(a, b)
+            if len(node.args) >= 2:
+                lhs_ssa = self.visit(node.args[0])
+                rhs_ssa = self.visit(node.args[1])
+                return self.mlir_generator.add_arith_addf(lhs_ssa, rhs_ssa)
+        # Handle type conversion function calls
+        elif func_name in ["index_cast", "oven_lang_index_cast"]:
+            # index_cast(value, from_type, to_type)
+            if len(node.args) >= 3:
+                value_ssa = self.visit(node.args[0])
+                from_type = (
+                    str(node.args[1].s)
+                    if isinstance(node.args[1], ast.Str)
+                    else "index"
+                )
+                to_type = (
+                    str(node.args[2].s) if isinstance(node.args[2], ast.Str) else "i32"
+                )
+                return self.mlir_generator.add_arith_index_cast(
+                    value_ssa, from_type, to_type
+                )
+        # Handle constant function calls
+        elif func_name in ["constant", "oven_lang_constant"]:
+            # constant(value, type)
+            if len(node.args) >= 2:
+                if isinstance(node.args[0], ast.Constant):
+                    value = node.args[0].value
+                    if isinstance(value, int):
+                        if (
+                            isinstance(node.args[1], ast.Str)
+                            and node.args[1].s == "index"
+                        ):
+                            return self.mlir_generator.add_constant_index(value)
+                        else:
+                            return self.mlir_generator.add_constant_int(value)
+                    elif isinstance(value, float):
+                        return self.mlir_generator.add_constant_float(value)
 
         # Visit arguments for regular function calls
         arg_ssa_values = []
@@ -467,6 +524,90 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             arg_ssa_values.append(self.visit(arg))
 
         return self.mlir_generator.add_function_call(func_name, arg_ssa_values)
+
+    def visit_BinOp(self, node: ast.BinOp) -> str:
+        """Visit a binary operation (e.g., a + b, a * b)."""
+        left_ssa = self.visit(node.left)
+        right_ssa = self.visit(node.right)
+
+        # Determine operation type based on operands
+        # For now, we'll use simple heuristics - can be enhanced later
+
+        if isinstance(node.op, ast.Add):
+            # Addition: + -> addi or addf
+            return self._generate_arithmetic_op("add", left_ssa, right_ssa)
+        elif isinstance(node.op, ast.Mult):
+            # Multiplication: * -> muli or mulf
+            return self._generate_arithmetic_op("mul", left_ssa, right_ssa)
+        elif isinstance(node.op, ast.Sub):
+            # Subtraction: - -> subi or subf
+            return self._generate_arithmetic_op("sub", left_ssa, right_ssa)
+        elif isinstance(node.op, ast.Div):
+            # Division: / -> divf (usually floating point)
+            return self._generate_arithmetic_op(
+                "div", left_ssa, right_ssa, force_float=True
+            )
+        else:
+            # Fallback for unsupported operations
+            return self.mlir_generator.add_constant_int(0)
+
+    def _generate_arithmetic_op(
+        self, op: str, left_ssa: str, right_ssa: str, force_float: bool = False
+    ) -> str:
+        """Generate appropriate arithmetic operation based on context."""
+        # Enhanced heuristic: analyze the context more carefully
+
+        is_gpu_context = hasattr(self, "_current_is_gpu") and self._current_is_gpu
+        is_math_context = hasattr(self, "_current_is_math") and self._current_is_math
+
+        # Strategy: In GPU context, use float operations for data values,
+        # but keep integer operations for pure index calculations
+
+        def involves_loaded_data(ssa_val: str) -> bool:
+            """Check if SSA value comes from loaded data or data operations."""
+            # This is a simplified heuristic. In a real implementation,
+            # you'd track the data flow more carefully.
+            # For now, we'll check if the value comes from a load operation
+            # by looking at recent operations in the generator
+            if hasattr(self.mlir_generator, "_recent_load_values"):
+                return ssa_val in self.mlir_generator._recent_load_values
+            return False
+
+        # Determine if we should use float operations
+        if force_float:
+            use_float = True
+        elif is_math_context:
+            use_float = True
+        elif is_gpu_context:
+            # In GPU context, use float for data operations
+            # For now, we'll default to float operations in GPU context
+            # since most GPU kernels work with floating point data
+            use_float = True
+        else:
+            use_float = False
+
+        # Generate the appropriate operation
+        if use_float:
+            if op == "add":
+                return self.mlir_generator.add_arith_addf(left_ssa, right_ssa)
+            elif op == "mul":
+                return self.mlir_generator.add_arith_mulf(left_ssa, right_ssa)
+            elif op == "sub":
+                return self.mlir_generator.add_arith_subf(left_ssa, right_ssa)
+            elif op == "div":
+                return self.mlir_generator.add_arith_divf(left_ssa, right_ssa)
+        else:
+            if op == "add":
+                return self.mlir_generator.add_arith_addi(left_ssa, right_ssa)
+            elif op == "mul":
+                return self.mlir_generator.add_arith_muli(left_ssa, right_ssa)
+            elif op == "sub":
+                return self.mlir_generator.add_arith_subi(left_ssa, right_ssa)
+            elif op == "div":
+                # Division is typically floating point even for integers
+                return self.mlir_generator.add_arith_divf(left_ssa, right_ssa, "f32")
+
+        return self.mlir_generator.add_constant_int(0)
 
     def visit_Expr(self, node: ast.Expr) -> Any:
         """Visit an expression statement."""

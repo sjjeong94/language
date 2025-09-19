@@ -41,8 +41,18 @@ def get_tid_x():
     raise NotImplementedError("This function is compiled to MLIR operations")
 
 
+def get_tid_y():
+    """Get the current thread ID in the Y dimension."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
 def get_bid_x():
     """Get the current block ID in the X dimension."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def get_bid_y():
+    """Get the current block ID in the Y dimension."""
     raise NotImplementedError("This function is compiled to MLIR operations")
 
 
@@ -125,3 +135,47 @@ __nvvm_read_ptx_sreg_ctaid_x = nvvm_read_ptx_sreg_ctaid_x
 __nvvm_read_ptx_sreg_tid_x = nvvm_read_ptx_sreg_tid_x
 __load_from_ptr = load
 __store_to_ptr = store
+
+
+# Arithmetic Operations
+def muli(a, b):
+    """Multiply two integer values."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def addi(a, b):
+    """Add two integer values."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def mulf(a, b):
+    """Multiply two floating-point values."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def addf(a, b):
+    """Add two floating-point values."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+# Type Conversion
+def index_cast(value, from_type, to_type):
+    """Cast between index and integer types."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+# Constants
+def constant(value, data_type):
+    """Create a constant value."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+# Loop Operations
+def for_loop(start, end, step, body_func, init_args=None):
+    """Create a for loop with iter_args."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def yield_value(*values):
+    """Yield values in a loop."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
