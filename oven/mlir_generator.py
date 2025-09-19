@@ -368,22 +368,22 @@ class MLIRGenerator:
 
     # Loop operations
     def add_scf_for(
-        self, start: str, end: str, step: str, iter_args: list = None
+        self, loop_var: str, start: str, end: str, step: str, iter_args: list = None
     ) -> str:
         """Add SCF for loop operation."""
         if iter_args is None:
             iter_args = []
 
         ssa_val = self.get_next_ssa_value()
-        iter_args_str = ", ".join(iter_args) if iter_args else ""
-        iter_types = " -> (f32)" if iter_args else ""
 
         if iter_args:
+            iter_args_str = ", ".join([f"%{arg} = {init}" for arg, init in iter_args])
+            iter_types = " -> (f32)" if iter_args else ""
             self._emit(
-                f"{ssa_val} = scf.for {start} = {start} to {end} step {step} iter_args({iter_args_str}){iter_types} {{"
+                f"{ssa_val} = scf.for %{loop_var} = {start} to {end} step {step} iter_args({iter_args_str}){iter_types} {{"
             )
         else:
-            self._emit(f"scf.for {start} = {start} to {end} step {step} {{")
+            self._emit(f"scf.for %{loop_var} = {start} to {end} step {step} {{")
 
         self.indent_level += 1
         return ssa_val

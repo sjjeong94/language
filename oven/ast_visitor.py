@@ -363,19 +363,137 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         self.mlir_generator.add_label(loop_end)
 
     def visit_For(self, node: ast.For) -> Any:
-        """Visit a for loop (simplified implementation)."""
-        # This is a simplified implementation
-        # In a real compiler, you'd need to handle iterables properly
-        loop_body = self.mlir_generator.get_next_label("for_body")
-        loop_end = self.mlir_generator.get_next_label("for_end")
+        """Visit a for loop and convert to SCF for loop."""
+        # Handle range() function calls specifically
+        if (
+            isinstance(node.iter, ast.Call)
+            and isinstance(node.iter.func, ast.Name)
+            and node.iter.func.id == "range"
+        ):
 
-        # For simplicity, treat as while loop with manual iteration
-        self.mlir_generator.add_label(loop_body)
-        for stmt in node.body:
-            self.visit(stmt)
-        self.mlir_generator.add_branch(loop_end)
+            # Extract range arguments (start, stop, step)
+            args = node.iter.args
+            if len(args) == 1:
+                # range(stop)
+                start_const = 0
+                end_val = self.visit(args[0])
+                step_const = 1
+            elif len(args) == 2:
+                # range(start, stop)
+                start_const = args[0].value if isinstance(args[0], ast.Constant) else 0
+                end_val = self.visit(args[1])
+                step_const = 1
+            elif len(args) == 3:
+                # range(start, stop, step)
+                start_const = args[0].value if isinstance(args[0], ast.Constant) else 0
+                end_val = self.visit(args[1])
+                step_const = args[2].value if isinstance(args[2], ast.Constant) else 1
+            else:
+                raise ValueError("Invalid range() arguments")
 
-        self.mlir_generator.add_label(loop_end)
+            # Create index constants
+            start_index = self.mlir_generator.add_constant_index(start_const)
+            end_index = self.mlir_generator.add_arith_index_cast(
+                end_val, "i32", "index"
+            )
+            step_index = self.mlir_generator.add_constant_index(step_const)
+
+            # Find accumulator variables - variables assigned in loop that exist before loop
+            accum_vars = []
+            for stmt in node.body:
+                if isinstance(stmt, ast.Assign):
+                    for target in stmt.targets:
+                        if (
+                            isinstance(target, ast.Name)
+                            and target.id in self.symbol_table
+                        ):
+                            var_name = target.id
+                            if var_name not in accum_vars:
+                                accum_vars.append(var_name)
+
+            # Get initial values for accumulator variables
+            iter_args = []
+            for var_name in accum_vars:
+                iter_args.append(self.symbol_table[var_name])
+
+            # Generate SCF for loop
+            loop_var = node.target.id
+            if iter_args:
+                # Create list of (arg_name, init_value) pairs
+                iter_arg_pairs = [
+                    (f"sum", iter_args[0])
+                ]  # Simplified - assume one accumulator
+                loop_ssa = self.mlir_generator.add_scf_for(
+                    f"{loop_var}_index",
+                    start_index,
+                    end_index,
+                    step_index,
+                    iter_arg_pairs,
+                )
+            else:
+                self.mlir_generator.add_scf_for(
+                    f"{loop_var}_index", start_index, end_index, step_index
+                )
+                loop_ssa = None
+
+            # Save symbol table
+            old_symbols = self.symbol_table.copy()
+
+            # Set up loop variable (convert from index to i32)
+            loop_var = node.target.id
+            loop_var_ssa = self.mlir_generator.add_arith_index_cast(
+                f"%{loop_var}_index", "index", "i32"
+            )
+            self.symbol_table[loop_var] = loop_var_ssa
+
+            # Set up accumulator variables as block arguments
+            for i, var_name in enumerate(accum_vars):
+                # In SCF for, iter_args become block arguments with specific names
+                self.symbol_table[var_name] = (
+                    "%sum"  # Simplified - use %sum for accumulator
+                )
+
+            # Process loop body
+            yield_values = []
+            for stmt in node.body:
+                if isinstance(stmt, ast.Assign):
+                    result_ssa = self.visit(stmt.value)
+                    for target in stmt.targets:
+                        if isinstance(target, ast.Name):
+                            var_name = target.id
+                            self.symbol_table[var_name] = result_ssa
+                            if var_name in accum_vars:
+                                yield_values.append(result_ssa)
+                else:
+                    self.visit(stmt)
+
+            # Generate yield
+            if yield_values:
+                self.mlir_generator.add_scf_yield(yield_values)
+
+            # End for loop
+            self.mlir_generator.end_scf_for()
+
+            # Update symbol table with loop results
+            if loop_ssa:
+                for var_name in accum_vars:
+                    self.symbol_table[var_name] = loop_ssa
+
+            # Clean up - remove loop variable, keep updated accumulators
+            if loop_var in self.symbol_table:
+                del self.symbol_table[loop_var]
+
+        else:
+            # Fallback for non-range iterables
+            loop_body = self.mlir_generator.get_next_label("for_body")
+            loop_end = self.mlir_generator.get_next_label("for_end")
+
+            self.mlir_generator.add_label(loop_body)
+            for stmt in node.body:
+                self.visit(stmt)
+            self.mlir_generator.add_branch(loop_end)
+
+            self.mlir_generator.add_label(loop_end)
 
     def visit_Call(self, node: ast.Call) -> str:
         """Visit a function call."""
