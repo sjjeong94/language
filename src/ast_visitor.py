@@ -23,6 +23,8 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         self.symbol_table: Dict[str, str] = {}  # Maps variable names to MLIR SSA values
         self.current_function: Optional[str] = None
         self.indent_level = 0
+        self.imports: Dict[str, str] = {}  # Maps import aliases to module names
+        self.oven_lang_alias: Optional[str] = None  # Track oven.language import alias
 
     def get_mlir_code(self) -> str:
         """Get the generated MLIR code."""
@@ -39,6 +41,31 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         self.mlir_generator.add_module_header()
         self.generic_visit(node)
         self.mlir_generator.add_module_footer()
+
+    def visit_Import(self, node: ast.Import) -> Any:
+        """Visit an import statement."""
+        for alias in node.names:
+            module_name = alias.name
+            alias_name = alias.asname if alias.asname else alias.name
+            self.imports[alias_name] = module_name
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> Any:
+        """Visit a from...import statement."""
+        if node.module == "oven.language":
+            for alias in node.names:
+                if alias.name == "*":
+                    # Handle from oven.language import *
+                    self.oven_lang_alias = ""  # No prefix needed
+                else:
+                    func_name = alias.name
+                    alias_name = alias.asname if alias.asname else alias.name
+                    # Map the specific function
+                    self.imports[alias_name] = f"oven.language.{func_name}"
+        elif node.module and "oven.language" in node.module:
+            # Handle import oven.language as ol
+            for alias in node.names:
+                alias_name = alias.asname if alias.asname else alias.name
+                self.oven_lang_alias = alias_name
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
         """Visit a function definition."""
@@ -111,7 +138,25 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                 self.has_gpu_calls = False
 
             def visit_Call(self, node):
-                if isinstance(node.func, ast.Name) and node.func.id in gpu_functions:
+                func_name = None
+                if isinstance(node.func, ast.Name):
+                    func_name = node.func.id
+                elif isinstance(node.func, ast.Attribute):
+                    # Handle ol.load, ol.store etc.
+                    if isinstance(node.func.value, ast.Name):
+                        module_name = node.func.value.id
+                        attr_name = node.func.attr
+                        # Check if it's an oven.language call for GPU functions
+                        if attr_name in [
+                            "load",
+                            "store",
+                            "get_tid_x",
+                            "get_bid_x",
+                            "get_bdim_x",
+                        ]:
+                            func_name = attr_name
+
+                if func_name and func_name in gpu_functions:
                     self.has_gpu_calls = True
                 self.generic_visit(node)
 
@@ -128,7 +173,19 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                 self.has_math_calls = False
 
             def visit_Call(self, node):
-                if isinstance(node.func, ast.Name) and node.func.id in math_functions:
+                func_name = None
+                if isinstance(node.func, ast.Name):
+                    func_name = node.func.id
+                elif isinstance(node.func, ast.Attribute):
+                    # Handle ol.exp, ol.sigmoid etc.
+                    if isinstance(node.func.value, ast.Name):
+                        module_name = node.func.value.id
+                        attr_name = node.func.attr
+                        # Check if it's an oven.language call for math functions
+                        if attr_name in math_functions:
+                            func_name = attr_name
+
+                if func_name and func_name in math_functions:
                     self.has_math_calls = True
                 self.generic_visit(node)
 
@@ -326,18 +383,37 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> str:
         """Visit a function call."""
-        # Get function name
+        # Get function name - handle both direct calls and attribute access
+        func_name = None
+        module_prefix = None
+
         if isinstance(node.func, ast.Name):
             func_name = node.func.id
-        else:
+        elif isinstance(node.func, ast.Attribute):
+            # Handle module.function calls (e.g., ol.load)
+            if isinstance(node.func.value, ast.Name):
+                module_prefix = node.func.value.id
+                func_name = node.func.attr
+
+                # Check if this is an oven.language call
+                if (
+                    module_prefix in self.imports
+                    and self.imports[module_prefix] == "oven.language"
+                ):
+                    func_name = f"oven_lang_{func_name}"
+                elif module_prefix == self.oven_lang_alias:
+                    func_name = f"oven_lang_{func_name}"
+
+        if not func_name:
             func_name = "unknown"
 
         # Handle GPU-specific function calls for kernel.py support
-        if func_name == "get_bdim_x":
+        # Support both direct calls and oven.language module calls
+        if func_name in ["get_bdim_x", "oven_lang_get_bdim_x"]:
             return self.mlir_generator.add_gpu_block_dim_x()
-        elif func_name == "get_bid_x":
+        elif func_name in ["get_bid_x", "oven_lang_get_bid_x"]:
             return self.mlir_generator.add_gpu_block_id_x()
-        elif func_name == "get_tid_x":
+        elif func_name in ["get_tid_x", "oven_lang_get_tid_x"]:
             return self.mlir_generator.add_gpu_thread_id_x()
         elif func_name == "__nvvm_read_ptx_sreg_ntid_x":
             return self.mlir_generator.add_gpu_block_dim_x()
@@ -345,7 +421,7 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             return self.mlir_generator.add_gpu_block_id_x()
         elif func_name == "__nvvm_read_ptx_sreg_tid_x":
             return self.mlir_generator.add_gpu_thread_id_x()
-        elif func_name == "load":
+        elif func_name in ["load", "oven_lang_load"]:
             # load(ptr, offset)
             if len(node.args) >= 2:
                 ptr_ssa = self.visit(node.args[0])
@@ -357,7 +433,7 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                 ptr_ssa = self.visit(node.args[0])
                 offset_ssa = self.visit(node.args[1])
                 return self.mlir_generator.add_gpu_load(ptr_ssa, offset_ssa)
-        elif func_name == "store":
+        elif func_name in ["store", "oven_lang_store"]:
             # store(value, ptr, offset)
             if len(node.args) >= 3:
                 value_ssa = self.visit(node.args[0])
@@ -374,12 +450,12 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                 self.mlir_generator.add_gpu_store(value_ssa, ptr_ssa, offset_ssa)
                 return value_ssa  # Return the stored value as SSA
         # Handle mathematical function calls
-        elif func_name == "exp":
+        elif func_name in ["exp", "oven_lang_exp"]:
             # exp(value)
             if len(node.args) >= 1:
                 operand_ssa = self.visit(node.args[0])
                 return self.mlir_generator.add_math_exp(operand_ssa)
-        elif func_name == "sigmoid":
+        elif func_name in ["sigmoid", "oven_lang_sigmoid"]:
             # sigmoid(value)
             if len(node.args) >= 1:
                 operand_ssa = self.visit(node.args[0])
