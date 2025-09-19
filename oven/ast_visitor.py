@@ -495,7 +495,12 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                 # range(start, stop, step)
                 start_const = args[0].value if isinstance(args[0], ast.Constant) else 0
                 end_val = self.visit(args[1])
-                step_const = args[2].value if isinstance(args[2], ast.Constant) else 1
+                if isinstance(args[2], ast.Constant):
+                    step_const = args[2].value
+                else:
+                    # Handle variable step
+                    step_val = self.visit(args[2])
+                    step_const = None
             else:
                 raise ValueError("Invalid range() arguments")
 
@@ -504,25 +509,49 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             end_index = self.mlir_generator.add_arith_index_cast(
                 end_val, "i32", "index"
             )
-            step_index = self.mlir_generator.add_constant_index(step_const)
+            if step_const is not None:
+                step_index = self.mlir_generator.add_constant_index(step_const)
+            else:
+                # Convert variable step to index
+                step_index = self.mlir_generator.add_arith_index_cast(
+                    step_val, "i32", "index"
+                )
 
             # Find accumulator variables - variables assigned in loop that exist before loop
             accum_vars = []
-            for stmt in node.body:
-                if isinstance(stmt, ast.Assign):
-                    for target in stmt.targets:
-                        if (
-                            isinstance(target, ast.Name)
-                            and target.id in self.symbol_table
-                        ):
-                            var_name = target.id
-                            if var_name not in accum_vars:
-                                accum_vars.append(var_name)
+
+            def find_assignments(node_list, depth=0):
+                """Recursively find all assignment targets in a node list."""
+                assignments = []
+                for stmt in node_list:
+                    if isinstance(stmt, ast.Assign):
+                        for target in stmt.targets:
+                            if isinstance(target, ast.Name):
+                                assignments.append((target.id, depth))
+                    elif isinstance(stmt, ast.For):
+                        # Recursively check nested for loops with increased depth
+                        assignments.extend(find_assignments(stmt.body, depth + 1))
+                    elif hasattr(stmt, "body"):
+                        # Check other compound statements
+                        assignments.extend(find_assignments(stmt.body, depth))
+                return assignments
+
+            all_assignments = find_assignments(node.body)
+
+            # Include variables that are assigned at any depth and exist in symbol table
+            for var_name, depth in all_assignments:
+                if var_name in self.symbol_table and var_name not in accum_vars:
+                    accum_vars.append(var_name)
+
+            # Debug: print what we found (simplified)
+            # print(f"For loop target: {node.target.id}, accumulator variables: {accum_vars}")
 
             # Get initial values for accumulator variables
             iter_args = []
             for var_name in accum_vars:
                 iter_args.append(self.symbol_table[var_name])
+
+            # print(f"iter_args for {node.target.id}: {iter_args}")
 
             # Generate SCF for loop
             loop_var = node.target.id
@@ -562,7 +591,9 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                 )
 
             # Process loop body
-            yield_values = []
+            nested_loop_results = []  # Track results from nested loops
+            accumulated_values = {}  # Track values for accumulator variables
+
             for stmt in node.body:
                 if isinstance(stmt, ast.Assign):
                     result_ssa = self.visit(stmt.value)
@@ -571,25 +602,47 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                             var_name = target.id
                             self.symbol_table[var_name] = result_ssa
                             if var_name in accum_vars:
-                                yield_values.append(result_ssa)
+                                accumulated_values[var_name] = result_ssa
+                elif isinstance(stmt, ast.For):
+                    # This is a nested for loop
+                    result_ssa = self.visit(stmt)
+                    if result_ssa:
+                        nested_loop_results.append(result_ssa)
+                        # Update accumulator variables with this result
+                        for var_name in accum_vars:
+                            self.symbol_table[var_name] = result_ssa
+                            accumulated_values[var_name] = result_ssa
                 else:
                     self.visit(stmt)
 
-            # Generate yield
-            if yield_values:
+            # Generate yield if we have iter_args
+            if iter_args:
+                # For iter_args, we MUST yield values
+                # Use the current values in symbol table for accumulator variables
+                yield_values = []
+                for var_name in accum_vars:
+                    current_val = self.symbol_table.get(var_name)
+                    if current_val:
+                        yield_values.append(current_val)
+
+                # Always emit yield for iter_args loops
                 self.mlir_generator.add_scf_yield(yield_values)
 
             # End for loop
             self.mlir_generator.end_scf_for()
 
             # Update symbol table with loop results
+            result_ssa = None
             if loop_ssa:
                 for var_name in accum_vars:
                     self.symbol_table[var_name] = loop_ssa
+                result_ssa = loop_ssa
 
             # Clean up - remove loop variable, keep updated accumulators
             if loop_var in self.symbol_table:
                 del self.symbol_table[loop_var]
+
+            return result_ssa
 
         else:
             # Fallback for non-range iterables
@@ -689,7 +742,14 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             if len(node.args) >= 2:
                 ptr_ssa = self.visit(node.args[0])
                 offset_ssa = self.visit(node.args[1])
-                ssa_val = self.mlir_generator.add_gpu_load(ptr_ssa, offset_ssa)
+
+                # Check if the pointer is a shared memory pointer
+                ptr_type = self._infer_type_from_ssa(ptr_ssa)
+                if ptr_type == "smem" or "smem" in str(ptr_ssa):
+                    ssa_val = self.mlir_generator.add_gpu_smem_load(ptr_ssa, offset_ssa)
+                else:
+                    ssa_val = self.mlir_generator.add_gpu_load(ptr_ssa, offset_ssa)
+
                 self._track_ssa_type(
                     ssa_val, "f32"
                 )  # Loads typically return f32 in GPU context
@@ -710,7 +770,15 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                 value_ssa = self.visit(node.args[0])
                 ptr_ssa = self.visit(node.args[1])
                 offset_ssa = self.visit(node.args[2])
-                self.mlir_generator.add_gpu_store(value_ssa, ptr_ssa, offset_ssa)
+
+                # Check if the pointer is a shared memory pointer
+                ptr_type = self._infer_type_from_ssa(ptr_ssa)
+                if ptr_type == "smem" or "smem" in str(ptr_ssa):
+                    self.mlir_generator.add_gpu_smem_store(
+                        value_ssa, ptr_ssa, offset_ssa
+                    )
+                else:
+                    self.mlir_generator.add_gpu_store(value_ssa, ptr_ssa, offset_ssa)
                 return value_ssa  # Return the stored value as SSA
         elif func_name == "__store_to_ptr":
             # __store_to_ptr(ptr, offset, value)
@@ -722,7 +790,9 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                 return value_ssa  # Return the stored value as SSA
         elif func_name in ["smem", "oven_lang_smem"]:
             # smem() - allocate shared memory
-            return self.mlir_generator.add_gpu_smem()
+            ssa_val = self.mlir_generator.add_gpu_smem()
+            self._track_ssa_type(ssa_val, "smem")  # Track as shared memory
+            return ssa_val
         elif func_name in ["barrier", "oven_lang_barrier"]:
             # barrier() - synchronization barrier
             self.mlir_generator.add_gpu_barrier()

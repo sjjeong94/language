@@ -25,7 +25,8 @@ class MLIRGenerator:
     def _emit(self, line: str, extra_indent: int = 0) -> None:
         """Emit a line of MLIR code with proper indentation."""
         indent = "  " * (self.indent_level + extra_indent)
-        self.code_lines.append(f"{indent}{line}")
+        full_line = f"{indent}{line}"
+        self.code_lines.append(full_line)
 
     def get_next_ssa_value(self) -> str:
         """Generate the next SSA value name."""
@@ -290,12 +291,35 @@ class MLIRGenerator:
         return ssa_val
 
     def add_gpu_store(
-        self, value: str, ptr: str, offset: str, value_type: str = "f32"
+        self,
+        value: str,
+        ptr: str,
+        offset: str,
+        value_type: str = "f32",
+        ptr_type: str = "!llvm.ptr",
     ) -> None:
         """Add GPU store operation."""
         self._emit(
-            f"oven.store {value}, {ptr}, {offset} : ({value_type}, !llvm.ptr, i32)"
+            f"oven.store {value}, {ptr}, {offset} : ({value_type}, {ptr_type}, i32)"
         )
+
+    def add_gpu_smem_store(
+        self, value: str, smem_ptr: str, offset: str, value_type: str = "f32"
+    ) -> None:
+        """Add GPU shared memory store operation."""
+        self._emit(
+            f"oven.store {value}, {smem_ptr}, {offset} : ({value_type}, !llvm.ptr<3>, i32)"
+        )
+
+    def add_gpu_smem_load(
+        self, smem_ptr: str, offset: str, result_type: str = "f32"
+    ) -> str:
+        """Add GPU shared memory load operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(
+            f"{ssa_val} = oven.load {smem_ptr}, {offset} : (!llvm.ptr<3>, i32) -> {result_type}"
+        )
+        return ssa_val
 
     def add_gpu_smem(self) -> str:
         """Add GPU shared memory allocation operation."""
@@ -437,11 +461,12 @@ class MLIRGenerator:
         if values:
             values_str = ", ".join(values)
             types_str = " : " + ", ".join(["f32"] * len(values))
-            self._emit(f"scf.yield {values_str}{types_str}")
+            yield_line = f"scf.yield {values_str}{types_str}"
+            self._emit(yield_line)
         else:
             self._emit("scf.yield")
 
     def end_scf_for(self) -> None:
         """End SCF for loop."""
-        self.indent_level -= 1
         self._emit("}")
+        self.indent_level -= 1

@@ -146,10 +146,18 @@ class PythonToMLIRCompiler:
         optimized_lines = []
 
         # Remove empty lines and redundant comments
-        for line in lines:
+        removed_lines = []
+        for i, line in enumerate(lines):
             stripped = line.strip()
             if stripped and not (stripped.startswith("//") and "TODO" in stripped):
                 optimized_lines.append(line)
+            else:
+                removed_lines.append(f"Line {i+1}: '{line}'")
+
+        if self.debug and removed_lines:
+            print("Lines removed during optimization:")
+            for removed in removed_lines:
+                print(f"  REMOVED: {removed}")
 
         # TODO: Add more sophisticated optimizations:
         # - Constant folding
