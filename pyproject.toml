@@ -7,14 +7,13 @@ name = "oven-compiler"
 version = "0.1.0"
 description = "Python to MLIR compiler with GPU and mathematical operation support"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Sinjin Jeong", email = "sjjeong94@gmail.com"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
