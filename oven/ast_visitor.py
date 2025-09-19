@@ -22,6 +22,7 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         self.mlir_generator = MLIRGenerator()
         self.symbol_table: Dict[str, str] = {}  # Maps variable names to MLIR SSA values
         self.symbol_types: Dict[str, str] = {}  # Maps variable names to MLIR types
+        self.ssa_types: Dict[str, str] = {}  # Maps SSA values to their types
         self.current_function: Optional[str] = None
         self.indent_level = 0
         self.imports: Dict[str, str] = {}  # Maps import aliases to module names
@@ -46,12 +47,21 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
 
     def _infer_type_from_ssa(self, ssa_val: str) -> str:
         """Infer type from SSA value by looking up in symbol tables."""
+        # First check direct SSA type mapping
+        if ssa_val in self.ssa_types:
+            return self.ssa_types[ssa_val]
+
         # Find the variable name that maps to this SSA value
         for var_name, var_ssa in self.symbol_table.items():
             if var_ssa == ssa_val:
                 return self._get_symbol_type(var_name)
         # Default fallback
         return "i32"
+
+    def _track_ssa_type(self, ssa_val: str, ssa_type: str) -> None:
+        """Track the type of an SSA value."""
+        if ssa_val:
+            self.ssa_types[ssa_val] = ssa_type
 
     def visit_Module(self, node: ast.Module) -> Any:
         """Visit a module node (top-level of Python file)."""
@@ -106,14 +116,14 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
 
         # Start function definition
         if is_gpu_kernel:
-            self.mlir_generator.start_gpu_function(node.name, arg_types)
+            self.mlir_generator.start_gpu_function(node.name, arg_types, arg_names)
         else:
             self.mlir_generator.start_function(node.name, arg_types, return_type)
 
         # Map arguments to SSA values and track their types
         for i, (arg_name, arg_type) in enumerate(zip(arg_names, arg_types)):
             if is_gpu_kernel:
-                ssa_val = f"%{chr(97+i)}"  # %a, %b, %c, etc. for GPU functions
+                ssa_val = f"%{arg_name}"  # Use actual parameter names for GPU functions
             else:
                 ssa_val = f"%arg{i}"  # %arg0, %arg1, etc. for regular functions
             self.symbol_table[arg_name] = ssa_val
@@ -173,7 +183,7 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                             "smem",
                             "barrier",
                             "nvvm_read_ptx_sreg_ntid_x",
-                            "nvvm_read_ptx_sreg_ctaid_x", 
+                            "nvvm_read_ptx_sreg_ctaid_x",
                             "nvvm_read_ptx_sreg_tid_x",
                             "load_input_x",
                             "load_input_y",
@@ -342,16 +352,26 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
     def visit_Constant(self, node: ast.Constant) -> str:
         """Visit a constant value."""
         if isinstance(node.value, int):
-            return self.mlir_generator.add_constant_int(node.value)
+            ssa_val = self.mlir_generator.add_constant_int(node.value)
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
         elif isinstance(node.value, float):
-            return self.mlir_generator.add_constant_float(node.value)
+            ssa_val = self.mlir_generator.add_constant_float(node.value)
+            self._track_ssa_type(ssa_val, "f32")
+            return ssa_val
         elif isinstance(node.value, str):
-            return self.mlir_generator.add_constant_string(node.value)
+            ssa_val = self.mlir_generator.add_constant_string(node.value)
+            self._track_ssa_type(ssa_val, "!llvm.ptr")
+            return ssa_val
         elif isinstance(node.value, bool):
-            return self.mlir_generator.add_constant_bool(node.value)
+            ssa_val = self.mlir_generator.add_constant_bool(node.value)
+            self._track_ssa_type(ssa_val, "i1")
+            return ssa_val
         else:
             # Fallback for other constant types
-            return self.mlir_generator.add_constant_int(0)
+            ssa_val = self.mlir_generator.add_constant_int(0)
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> str:
         """Visit a unary operation."""
@@ -612,39 +632,78 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         # Handle GPU-specific function calls for kernel.py support
         # Support both direct calls and oven.language module calls
         if func_name in ["get_bdim_x", "oven_lang_get_bdim_x"]:
-            return self.mlir_generator.add_gpu_block_dim_x()
+            ssa_val = self.mlir_generator.add_gpu_block_dim_x()
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
         elif func_name in ["get_bid_x", "oven_lang_get_bid_x"]:
-            return self.mlir_generator.add_gpu_block_id_x()
+            ssa_val = self.mlir_generator.add_gpu_block_id_x()
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
         elif func_name in ["get_bid_y", "oven_lang_get_bid_y"]:
-            return self.mlir_generator.add_gpu_block_id_y()
+            ssa_val = self.mlir_generator.add_gpu_block_id_y()
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
         elif func_name in ["get_tid_x", "oven_lang_get_tid_x"]:
-            return self.mlir_generator.add_gpu_thread_id_x()
+            ssa_val = self.mlir_generator.add_gpu_thread_id_x()
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
         elif func_name in ["get_tid_y", "oven_lang_get_tid_y"]:
-            return self.mlir_generator.add_gpu_thread_id_y()
+            ssa_val = self.mlir_generator.add_gpu_thread_id_y()
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
         elif func_name == "__nvvm_read_ptx_sreg_ntid_x":
-            return self.mlir_generator.add_gpu_block_dim_x()
-        elif func_name in ["nvvm_read_ptx_sreg_ntid_x", "oven_lang_nvvm_read_ptx_sreg_ntid_x"]:
-            return self.mlir_generator.add_gpu_block_dim_x()
+            ssa_val = self.mlir_generator.add_gpu_block_dim_x()
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
+        elif func_name in [
+            "nvvm_read_ptx_sreg_ntid_x",
+            "oven_lang_nvvm_read_ptx_sreg_ntid_x",
+        ]:
+            ssa_val = self.mlir_generator.add_gpu_block_dim_x()
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
         elif func_name == "__nvvm_read_ptx_sreg_ctaid_x":
-            return self.mlir_generator.add_gpu_block_id_x()
-        elif func_name in ["nvvm_read_ptx_sreg_ctaid_x", "oven_lang_nvvm_read_ptx_sreg_ctaid_x"]:
-            return self.mlir_generator.add_gpu_block_id_x()
+            ssa_val = self.mlir_generator.add_gpu_block_id_x()
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
+        elif func_name in [
+            "nvvm_read_ptx_sreg_ctaid_x",
+            "oven_lang_nvvm_read_ptx_sreg_ctaid_x",
+        ]:
+            ssa_val = self.mlir_generator.add_gpu_block_id_x()
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
         elif func_name == "__nvvm_read_ptx_sreg_tid_x":
-            return self.mlir_generator.add_gpu_thread_id_x()
-        elif func_name in ["nvvm_read_ptx_sreg_tid_x", "oven_lang_nvvm_read_ptx_sreg_tid_x"]:
-            return self.mlir_generator.add_gpu_thread_id_x()
+            ssa_val = self.mlir_generator.add_gpu_thread_id_x()
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
+        elif func_name in [
+            "nvvm_read_ptx_sreg_tid_x",
+            "oven_lang_nvvm_read_ptx_sreg_tid_x",
+        ]:
+            ssa_val = self.mlir_generator.add_gpu_thread_id_x()
+            self._track_ssa_type(ssa_val, "i32")
+            return ssa_val
         elif func_name in ["load", "oven_lang_load"]:
             # load(ptr, offset)
             if len(node.args) >= 2:
                 ptr_ssa = self.visit(node.args[0])
                 offset_ssa = self.visit(node.args[1])
-                return self.mlir_generator.add_gpu_load(ptr_ssa, offset_ssa)
+                ssa_val = self.mlir_generator.add_gpu_load(ptr_ssa, offset_ssa)
+                self._track_ssa_type(
+                    ssa_val, "f32"
+                )  # Loads typically return f32 in GPU context
+                return ssa_val
         elif func_name == "__load_from_ptr":
             # __load_from_ptr(ptr, offset)
             if len(node.args) >= 2:
                 ptr_ssa = self.visit(node.args[0])
                 offset_ssa = self.visit(node.args[1])
-                return self.mlir_generator.add_gpu_load(ptr_ssa, offset_ssa)
+                ssa_val = self.mlir_generator.add_gpu_load(ptr_ssa, offset_ssa)
+                self._track_ssa_type(
+                    ssa_val, "f32"
+                )  # Loads typically return f32 in GPU context
+                return ssa_val
         elif func_name in ["store", "oven_lang_store"]:
             # store(value, ptr, offset)
             if len(node.args) >= 3:
@@ -668,6 +727,34 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             # barrier() - synchronization barrier
             self.mlir_generator.add_gpu_barrier()
             return None  # barrier doesn't return a value
+        elif func_name in ["load_input_x", "oven_lang_load_input_x"]:
+            # load_input_x(index) - load from input buffer x
+            if len(node.args) >= 1:
+                index_ssa = self.visit(node.args[0])
+                ssa_val = self.mlir_generator.add_gpu_load_input_x(index_ssa)
+                self._track_ssa_type(ssa_val, "f32")  # Input loads return f32
+                return ssa_val
+        elif func_name in ["store_output_x", "oven_lang_store_output_x"]:
+            # store_output_x(value, index) - store to output buffer x
+            if len(node.args) >= 2:
+                value_ssa = self.visit(node.args[0])
+                index_ssa = self.visit(node.args[1])
+                self.mlir_generator.add_gpu_store_output_x(value_ssa, index_ssa)
+                return value_ssa  # Return the stored value
+        elif func_name in ["load_input_y", "oven_lang_load_input_y"]:
+            # load_input_y(index) - load from input buffer y
+            if len(node.args) >= 1:
+                index_ssa = self.visit(node.args[0])
+                ssa_val = self.mlir_generator.add_gpu_load_input_y(index_ssa)
+                self._track_ssa_type(ssa_val, "f32")  # Input loads return f32
+                return ssa_val
+        elif func_name in ["store_output_y", "oven_lang_store_output_y"]:
+            # store_output_y(value, index) - store to output buffer y
+            if len(node.args) >= 2:
+                value_ssa = self.visit(node.args[0])
+                index_ssa = self.visit(node.args[1])
+                self.mlir_generator.add_gpu_store_output_y(value_ssa, index_ssa)
+                return value_ssa  # Return the stored value
         # Handle mathematical function calls
         elif func_name in ["exp", "oven_lang_exp"]:
             # exp(value)
@@ -788,6 +875,12 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         elif left_type == "!llvm.ptr" or right_type == "!llvm.ptr":
             # Pointer arithmetic should use integer operations
             use_float = False
+        elif left_type == "i32" and right_type == "i32":
+            # Both operands are integers, use integer operations
+            use_float = False
+        elif left_type == "index" or right_type == "index":
+            # Index arithmetic uses integer operations
+            use_float = False
         else:
             # Enhanced heuristic: analyze the context as fallback
             is_gpu_context = hasattr(self, "_current_is_gpu") and self._current_is_gpu
@@ -798,7 +891,7 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             if is_math_context:
                 use_float = True
             elif is_gpu_context:
-                # In GPU context, default to float for data operations
+                # In GPU context, default to float for data operations only when types are unknown
                 use_float = True
             else:
                 # For regular functions, use integer operations unless types suggest otherwise
@@ -806,26 +899,35 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
 
         # Generate the appropriate operation
         if use_float:
+            result_type = "f32"
             if op == "add":
-                return self.mlir_generator.add_arith_addf(left_ssa, right_ssa)
+                ssa_val = self.mlir_generator.add_arith_addf(left_ssa, right_ssa)
             elif op == "mul":
-                return self.mlir_generator.add_arith_mulf(left_ssa, right_ssa)
+                ssa_val = self.mlir_generator.add_arith_mulf(left_ssa, right_ssa)
             elif op == "sub":
-                return self.mlir_generator.add_arith_subf(left_ssa, right_ssa)
+                ssa_val = self.mlir_generator.add_arith_subf(left_ssa, right_ssa)
             elif op == "div":
-                return self.mlir_generator.add_arith_divf(left_ssa, right_ssa)
+                ssa_val = self.mlir_generator.add_arith_divf(left_ssa, right_ssa)
+            else:
+                ssa_val = self.mlir_generator.add_constant_int(0)
         else:
+            result_type = "i32"
             if op == "add":
-                return self.mlir_generator.add_arith_addi(left_ssa, right_ssa)
+                ssa_val = self.mlir_generator.add_arith_addi(left_ssa, right_ssa)
             elif op == "mul":
-                return self.mlir_generator.add_arith_muli(left_ssa, right_ssa)
+                ssa_val = self.mlir_generator.add_arith_muli(left_ssa, right_ssa)
             elif op == "sub":
-                return self.mlir_generator.add_arith_subi(left_ssa, right_ssa)
+                ssa_val = self.mlir_generator.add_arith_subi(left_ssa, right_ssa)
             elif op == "div":
                 # Division is typically floating point even for integers
-                return self.mlir_generator.add_arith_divf(left_ssa, right_ssa, "f32")
+                result_type = "f32"
+                ssa_val = self.mlir_generator.add_arith_divf(left_ssa, right_ssa, "f32")
+            else:
+                ssa_val = self.mlir_generator.add_constant_int(0)
 
-        return self.mlir_generator.add_constant_int(0)
+        # Track the result type
+        self._track_ssa_type(ssa_val, result_type)
+        return ssa_val
 
     def visit_Expr(self, node: ast.Expr) -> Any:
         """Visit an expression statement."""

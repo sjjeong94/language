@@ -46,8 +46,8 @@ def gpu_kernel(a_ptr: ol.ptr, b_ptr: ol.ptr):
 
     result = compile_python_string(python_code)
 
-    # Should generate GPU function with pointer types
-    assert "func.func @gpu_kernel(%a: !llvm.ptr, %b: !llvm.ptr)" in result
+    # Should generate GPU function with pointer types (using actual parameter names)
+    assert "func.func @gpu_kernel(%a_ptr: !llvm.ptr, %b_ptr: !llvm.ptr)" in result
     assert "nvvm.read.ptx.sreg.tid.x" in result
 
 
@@ -65,8 +65,11 @@ def mixed_function(ptr_arg: ol.ptr, int_arg: int, float_arg: f32) -> f32:
 
     result = compile_python_string(python_code)
 
-    # Should generate function with mixed types (GPU function uses %a, %b, %c naming)
-    assert "func.func @mixed_function(%a: !llvm.ptr, %b: i32, %c: f32)" in result
+    # Should generate function with mixed types (GPU function uses actual parameter names)
+    assert (
+        "func.func @mixed_function(%ptr_arg: !llvm.ptr, %int_arg: i32, %float_arg: f32)"
+        in result
+    )
     assert "arith.addf" in result  # Float addition should be used
 
 
@@ -83,7 +86,7 @@ def gpu_function_no_hints(a, b):
 
     result = compile_python_string(python_code)
 
-    # Should fall back to context-based inference (GPU function -> pointers)
+    # Should fall back to context-based inference (GPU function -> pointers, using actual names)
     assert "func.func @gpu_function_no_hints(%a: !llvm.ptr, %b: !llvm.ptr)" in result
 
 

@@ -62,11 +62,20 @@ class MLIRGenerator:
         self._emit(f"func.func @{name}({args_str}) -> {return_type} {{")
         self.indent_level += 1
 
-    def start_gpu_function(self, name: str, arg_types: List[str]) -> None:
+    def start_gpu_function(
+        self, name: str, arg_types: List[str], arg_names: Optional[List[str]] = None
+    ) -> None:
         """Start a GPU function definition (no return type)."""
-        args_str = ", ".join(
-            f"%{chr(97+i)}: {arg_type}" for i, arg_type in enumerate(arg_types)
-        )
+        if arg_names and len(arg_names) == len(arg_types):
+            args_str = ", ".join(
+                f"%{arg_name}: {arg_type}"
+                for arg_name, arg_type in zip(arg_names, arg_types)
+            )
+        else:
+            # Fallback to single letter names
+            args_str = ", ".join(
+                f"%{chr(97+i)}: {arg_type}" for i, arg_type in enumerate(arg_types)
+            )
         self._emit(f"func.func @{name}({args_str}) {{")
         self.indent_level += 1
 
@@ -303,6 +312,30 @@ class MLIRGenerator:
     def add_gpu_return(self) -> None:
         """Add GPU return operation."""
         self._emit("return")
+
+    def add_gpu_load_input_x(self, index: str) -> str:
+        """Add load from input buffer x operation."""
+        ssa_val = self.get_next_ssa_value()
+        # For now, generate a simple function call - can be enhanced to actual GPU load later
+        self._emit(f"{ssa_val} = call @load_input_x({index}) : (i32) -> f32")
+        return ssa_val
+
+    def add_gpu_store_output_x(self, value: str, index: str) -> None:
+        """Add store to output buffer x operation."""
+        # For now, generate a simple function call - can be enhanced to actual GPU store later
+        self._emit(f"call @store_output_x({value}, {index}) : (f32, i32) -> ()")
+
+    def add_gpu_load_input_y(self, index: str) -> str:
+        """Add load from input buffer y operation."""
+        ssa_val = self.get_next_ssa_value()
+        # For now, generate a simple function call - can be enhanced to actual GPU load later
+        self._emit(f"{ssa_val} = call @load_input_y({index}) : (i32) -> f32")
+        return ssa_val
+
+    def add_gpu_store_output_y(self, value: str, index: str) -> None:
+        """Add store to output buffer y operation."""
+        # For now, generate a simple function call - can be enhanced to actual GPU store later
+        self._emit(f"call @store_output_y({value}, {index}) : (f32, i32) -> ()")
 
     # Mathematical operations
     def add_math_exp(self, operand: str, operand_type: str = "f32") -> str:

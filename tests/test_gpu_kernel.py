@@ -115,7 +115,7 @@ def kernel(input_array, output_array, size):
 
         # Check function signature uses proper GPU argument names
         assert (
-            "func.func @kernel(%a: !llvm.ptr, %b: !llvm.ptr, %c: !llvm.ptr)"
+            "func.func @kernel(%input_array: !llvm.ptr, %output_array: !llvm.ptr, %size: !llvm.ptr)"
             in mlir_code
         )
 
@@ -152,7 +152,7 @@ def test_memory(src, dst):
         mlir_code = compiler.compile_source(source)
 
         # Check load operation
-        assert "oven.load %a," in mlir_code
+        assert "oven.load %src," in mlir_code
         assert "(!llvm.ptr, i32) -> f32" in mlir_code
 
         # Check store operation
@@ -206,8 +206,14 @@ def math_then_gpu(data, result):
         mlir_code = compiler.compile_source(source)
 
         # Check GPU functions have GPU signatures
-        assert "func.func @gpu_with_math(%a: !llvm.ptr, %b: !llvm.ptr)" in mlir_code
-        assert "func.func @math_then_gpu(%a: !llvm.ptr, %b: !llvm.ptr)" in mlir_code
+        assert (
+            "func.func @gpu_with_math(%input_ptr: !llvm.ptr, %output_ptr: !llvm.ptr)"
+            in mlir_code
+        )
+        assert (
+            "func.func @math_then_gpu(%data: !llvm.ptr, %result: !llvm.ptr)"
+            in mlir_code
+        )
 
         # Check math function has f32 signature
         assert "func.func @pure_math(%arg0: f32) -> f32" in mlir_code

@@ -30,7 +30,10 @@ def test_2d_kernel(a_ptr, b_ptr):
         mlir_code = compiler.compile_source(source)
 
         # Check function signature for GPU kernel
-        assert "func.func @test_2d_kernel(%a: !llvm.ptr, %b: !llvm.ptr)" in mlir_code
+        assert (
+            "func.func @test_2d_kernel(%a_ptr: !llvm.ptr, %b_ptr: !llvm.ptr)"
+            in mlir_code
+        )
 
         # Check Y dimension operations are present
         assert "nvvm.read.ptx.sreg.tid.x" in mlir_code

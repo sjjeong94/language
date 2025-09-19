@@ -12,9 +12,9 @@ import oven.language as ol
 
 def demo_smem_barrier():
     """Demonstrate shared memory and barrier usage."""
-    
+
     print("=== Shared Memory and Barrier Demo ===\n")
-    
+
     # Example 1: Basic shared memory allocation
     print("1. Basic shared memory allocation:")
     python_code = """
@@ -27,7 +27,7 @@ def allocate_smem():
     result = compile_python_string(python_code)
     print(result)
     print()
-    
+
     # Example 2: Simple barrier usage
     print("2. Barrier synchronization:")
     python_code = """
@@ -39,7 +39,7 @@ def sync_threads():
     result = compile_python_string(python_code)
     print(result)
     print()
-    
+
     # Example 3: Complete shared memory kernel pattern
     print("3. Complete shared memory kernel:")
     python_code = """
@@ -75,7 +75,7 @@ def shared_memory_kernel(input_ptr: ol.ptr, output_ptr: ol.ptr):
     result = compile_python_string(python_code)
     print(result)
     print()
-    
+
     # Example 4: Matrix transpose with shared memory
     print("4. Matrix transpose pattern:")
     python_code = """

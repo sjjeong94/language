@@ -31,11 +31,13 @@ def test_gpu_ops(a_ptr, b_ptr):
         mlir_code = compiler.compile_source(source)
 
         # Check function signature for GPU kernel
-        assert "func.func @test_gpu_ops(%a: !llvm.ptr, %b: !llvm.ptr)" in mlir_code
+        assert (
+            "func.func @test_gpu_ops(%a_ptr: !llvm.ptr, %b_ptr: !llvm.ptr)" in mlir_code
+        )
 
         # Check GPU operations are present
         assert "nvvm.read.ptx.sreg.tid.x" in mlir_code
-        assert "oven.load %a," in mlir_code
+        assert "oven.load %a_ptr," in mlir_code
         assert "math.exp" in mlir_code
         assert "oven.store" in mlir_code
 
@@ -57,7 +59,10 @@ def test_direct(input_ptr, output_ptr):
         mlir_code = compiler.compile_source(source)
 
         # Check function signature for GPU kernel
-        assert "func.func @test_direct(%a: !llvm.ptr, %b: !llvm.ptr)" in mlir_code
+        assert (
+            "func.func @test_direct(%input_ptr: !llvm.ptr, %output_ptr: !llvm.ptr)"
+            in mlir_code
+        )
 
         # Check operations are present
         assert "nvvm.read.ptx.sreg.tid.x" in mlir_code
@@ -85,8 +90,14 @@ def test_direct_style(x_ptr, y_ptr):
         mlir_code = compiler.compile_source(source)
 
         # Check both functions have GPU signatures
-        assert "func.func @test_alias_style(%a: !llvm.ptr, %b: !llvm.ptr)" in mlir_code
-        assert "func.func @test_direct_style(%a: !llvm.ptr, %b: !llvm.ptr)" in mlir_code
+        assert (
+            "func.func @test_alias_style(%a_ptr: !llvm.ptr, %b_ptr: !llvm.ptr)"
+            in mlir_code
+        )
+        assert (
+            "func.func @test_direct_style(%x_ptr: !llvm.ptr, %y_ptr: !llvm.ptr)"
+            in mlir_code
+        )
 
         # Check operations are present
         assert "oven.load" in mlir_code
@@ -115,7 +126,8 @@ def test_mixed_math_gpu(input_ptr, output_ptr):
 
         # Check GPU function has GPU signature
         assert (
-            "func.func @test_mixed_math_gpu(%a: !llvm.ptr, %b: !llvm.ptr)" in mlir_code
+            "func.func @test_mixed_math_gpu(%input_ptr: !llvm.ptr, %output_ptr: !llvm.ptr)"
+            in mlir_code
         )
 
         # Check operations
@@ -153,7 +165,7 @@ def new_style_math(x):
 
         # Check GPU functions have GPU signatures
         assert "func.func @old_style_gpu()" in mlir_code
-        assert "func.func @new_style_gpu(%a: !llvm.ptr)" in mlir_code
+        assert "func.func @new_style_gpu(%ptr: !llvm.ptr)" in mlir_code
 
         # Check math functions have appropriate signatures
         assert "func.func @old_style_math(%arg0: f32) -> f32" in mlir_code
