@@ -1,0 +1,13 @@
+# Python to MLIR Compiler Dependencies
+
+# Core dependencies (none - uses only Python standard library)
+
+# Development dependencies
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-xdist>=3.0.0
+
+# Optional: Code quality tools
+# black>=22.0.0
+# flake8>=4.0.0
+# mypy>=0.950
