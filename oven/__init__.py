@@ -5,9 +5,12 @@ This module provides GPU and mathematical operations for compilation to MLIR.
 """
 
 from .language import *
+from .compiler import PythonToMLIRCompiler
 
 __version__ = "0.1.0"
 __all__ = [
+    # Core compiler
+    "PythonToMLIRCompiler",
     # GPU operations
     "load",
     "store",

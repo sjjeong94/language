@@ -10,10 +10,10 @@ import sys
 import os
 from pathlib import Path
 
-# Add src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+# Add oven directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
-from src.compiler import PythonToMLIRCompiler, CompilationError
+from oven.compiler import PythonToMLIRCompiler, CompilationError
 
 
 def main():

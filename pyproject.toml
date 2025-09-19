@@ -1,3 +1,57 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oven-compiler"
+version = "0.1.0"
+description = "Python to MLIR compiler with GPU and mathematical operation support"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Sinjin Jeong", email = "sjjeong94@gmail.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Scientific/Engineering",
+]
+keywords = ["mlir", "compiler", "gpu", "python"]
+requires-python = ">=3.8"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy",
+]
+test = [
+    "pytest>=6.0",
+    "pytest-cov",
+]
+
+[project.urls]
+Homepage = "https://github.com/sjjeong94/language"
+Repository = "https://github.com/sjjeong94/language"
+Issues = "https://github.com/sjjeong94/language/issues"
+
+[project.scripts]
+oven = "oven.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["oven*"]
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q --strict-markers"
@@ -22,7 +76,7 @@ markers = [
 
 # Configure coverage if using pytest-cov
 [tool.coverage.run]
-source = ["src"]
+source = ["oven"]
 omit = [
     "*/tests/*",
     "*/test_*",

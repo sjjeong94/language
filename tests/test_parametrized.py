@@ -9,8 +9,8 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.compiler import PythonToMLIRCompiler
-from src.utils.mlir_utils import MLIRUtils
+from oven.compiler import PythonToMLIRCompiler
+from oven.utils.mlir_utils import MLIRUtils
 
 
 @pytest.mark.unit

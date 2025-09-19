@@ -11,9 +11,9 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.compiler import PythonToMLIRCompiler
-from src.mlir_generator import MLIRGenerator
-from src.ast_visitor import PythonToMLIRASTVisitor
+from oven.compiler import PythonToMLIRCompiler
+from oven.mlir_generator import MLIRGenerator
+from oven.ast_visitor import PythonToMLIRASTVisitor
 
 
 @pytest.fixture

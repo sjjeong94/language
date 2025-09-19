@@ -11,10 +11,10 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.compiler import PythonToMLIRCompiler, CompilationError, compile_python_string
-from src.ast_visitor import PythonToMLIRASTVisitor
-from src.mlir_generator import MLIRGenerator
-from src.utils.mlir_utils import MLIRUtils
+from oven.compiler import PythonToMLIRCompiler, CompilationError, compile_python_string
+from oven.ast_visitor import PythonToMLIRASTVisitor
+from oven.mlir_generator import MLIRGenerator
+from oven.utils.mlir_utils import MLIRUtils
 
 
 @pytest.mark.unit

@@ -1,33 +1,90 @@
-# Python to MLIR Compiler
+# Oven Compiler - Python to MLIR
 
-A Python compiler that converts Python source code to MLIR (Multi-Level Intermediate Representation) using Python's AST.
+A Python compiler that converts Python source code to MLIR (Multi-Level Intermediate Representation) with support for GPU operations and mathematical functions.
 
 ## Features
 
 - **Python AST 활용**: Python의 내장 AST 모듈을 사용하여 소스 코드를 파싱
-- **일반화된 구조**: 방문자 패턴을 사용하여 확장 가능한 아키텍처
-- **MLIR 생성**: 표준 MLIR 연산들을 생성 (func, arith, cf, memref 다이얼렉트 지원)
-- **백엔드 호환**: 생성된 MLIR은 다양한 백엔드 컴파일러에서 사용 가능
-- **테스트 지원**: Pytest 기반의 포괄적인 테스트 스위트
+- **GPU 연산 지원**: NVIDIA GPU 커널 및 메모리 연산 지원 (nvvm, oven 다이얼렉트)
+- **수학 함수 지원**: exp, sigmoid 등 수학 함수의 MLIR 변환
+- **Triton 스타일 API**: `import oven.language as ol` 구조로 체계적인 함수 호출
+- **MLIR 생성**: 표준 MLIR 연산들을 생성 (func, arith, cf, memref, math 다이얼렉트 지원)
+- **명령행 인터페이스**: `oven compile` 명령어로 간편한 컴파일
+- **테스트 지원**: Pytest 기반의 포괄적인 테스트 스위트 (104개 테스트)
+
+## Installation
+
+```bash
+# Install from source
+pip install -e .
+
+# Or install development dependencies
+pip install -e .[dev]
+```
+
+## Quick Start
+
+### Command Line Usage
+
+```bash
+# Compile a Python file to MLIR
+oven compile kernel.py
+
+# Specify output file
+oven compile kernel.py -o output.mlir
+
+# Enable debug mode
+oven compile kernel.py --debug
+
+# Show version
+oven --version
+
+# Alternative module syntax
+python -m oven compile kernel.py
+```
+
+### Programming API
+
+```python
+import oven.language as ol
+
+# GPU kernel example
+def gpu_kernel(input_ptr, output_ptr):
+    tid = ol.get_tid_x()
+    value = ol.load(input_ptr, tid)
+    result = ol.exp(value)
+    ol.store(result, output_ptr, tid)
+
+# Mathematical function example  
+def math_function(x):
+    return ol.sigmoid(ol.exp(x))
+```
 
 ## Project Structure
 
 ```
-compiler/
-├── src/
+oven-compiler/
+├── oven/                   # Main package
 │   ├── __init__.py
+│   ├── __main__.py         # Module entry point
+│   ├── cli.py              # Command line interface
+│   ├── language.py         # GPU and math function definitions
 │   ├── ast_visitor.py      # AST visitor pattern implementation
 │   ├── mlir_generator.py   # MLIR code generation
 │   ├── compiler.py         # Main compiler interface
 │   └── utils/
 │       ├── __init__.py
 │       └── mlir_utils.py   # MLIR utility functions
-├── tests/
-│   ├── __init__.py
+├── tests/                  # Test suite (104 tests)
 │   ├── conftest.py         # Pytest fixtures and configuration
-│   ├── test_compiler.py    # Main test suite
-│   ├── test_parametrized.py # Parametrized tests
-│   └── examples/
+│   ├── test_compiler.py    # Main compiler tests
+│   ├── test_gpu_kernel.py  # GPU functionality tests
+│   ├── test_math_functions.py # Mathematical function tests
+│   ├── test_oven_import.py # Import structure tests
+│   └── test_parametrized.py # Parametrized tests
+├── pyproject.toml          # Package configuration
+└── README.md
+```
 │       ├── sample.py       # Basic examples
 │       └── complex.py      # Complex examples
 ├── pyproject.toml          # Pytest configuration
