@@ -62,6 +62,14 @@ class MLIRGenerator:
         self._emit(f"func.func @{name}({args_str}) -> {return_type} {{")
         self.indent_level += 1
 
+    def start_gpu_function(self, name: str, arg_types: List[str]) -> None:
+        """Start a GPU function definition (no return type)."""
+        args_str = ", ".join(
+            f"%{chr(97+i)}: {arg_type}" for i, arg_type in enumerate(arg_types)
+        )
+        self._emit(f"func.func @{name}({args_str}) {{")
+        self.indent_level += 1
+
     def end_function(self) -> None:
         """End a function definition."""
         self.indent_level -= 1
@@ -234,3 +242,42 @@ class MLIRGenerator:
         pairs = ", ".join(f"({value} : {block})" for value, block in values_and_blocks)
         self._emit(f"{ssa_val} = phi {pairs} : {result_type}")
         return ssa_val
+
+    # GPU-related operations for kernel.py support
+    def add_gpu_block_dim_x(self) -> str:
+        """Add NVVM read block dimension X operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = nvvm.read.ptx.sreg.ntid.x : i32")
+        return ssa_val
+
+    def add_gpu_block_id_x(self) -> str:
+        """Add NVVM read block ID X operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = nvvm.read.ptx.sreg.ctaid.x : i32")
+        return ssa_val
+
+    def add_gpu_thread_id_x(self) -> str:
+        """Add NVVM read thread ID X operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = nvvm.read.ptx.sreg.tid.x : i32")
+        return ssa_val
+
+    def add_gpu_load(self, ptr: str, offset: str, result_type: str = "f32") -> str:
+        """Add GPU load operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(
+            f"{ssa_val} = oven.load {ptr}, {offset} : (!llvm.ptr, i32) -> {result_type}"
+        )
+        return ssa_val
+
+    def add_gpu_store(
+        self, value: str, ptr: str, offset: str, value_type: str = "f32"
+    ) -> None:
+        """Add GPU store operation."""
+        self._emit(
+            f"oven.store {value}, {ptr}, {offset} : ({value_type}, !llvm.ptr, i32)"
+        )
+
+    def add_gpu_return(self) -> None:
+        """Add GPU return operation."""
+        self._emit("return")

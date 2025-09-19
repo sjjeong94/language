@@ -44,32 +44,83 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         """Visit a function definition."""
         self.current_function = node.name
 
-        # Extract argument types (assuming all are i32 for simplicity)
-        arg_types = ["i32"] * len(node.args.args)
+        # Check if this is a GPU kernel function (has GPU-specific calls)
+        is_gpu_kernel = self._is_gpu_kernel_function(node)
+        self._current_is_gpu = is_gpu_kernel  # Track for visit_Return
+
+        if is_gpu_kernel:
+            # For GPU kernels, use pointer types for array arguments
+            arg_types = ["!llvm.ptr"] * len(node.args.args)
+            return_type = ""  # GPU kernels typically don't return values
+        else:
+            # Regular functions use i32 types
+            arg_types = ["i32"] * len(node.args.args)
+            return_type = "i32"
+
         arg_names = [arg.arg for arg in node.args.args]
 
         # Start function definition
-        self.mlir_generator.start_function(node.name, arg_types, "i32")
+        if is_gpu_kernel:
+            self.mlir_generator.start_gpu_function(node.name, arg_types)
+        else:
+            self.mlir_generator.start_function(node.name, arg_types, return_type)
 
         # Map arguments to SSA values
         for i, arg_name in enumerate(arg_names):
-            ssa_val = f"%arg{i}"
+            if is_gpu_kernel:
+                ssa_val = f"%{chr(97+i)}"  # %a, %b, %c, etc. for GPU functions
+            else:
+                ssa_val = f"%arg{i}"  # %arg0, %arg1, etc. for regular functions
             self.symbol_table[arg_name] = ssa_val
 
         # Visit function body
         for stmt in node.body:
             self.visit(stmt)
 
+        if is_gpu_kernel:
+            self.mlir_generator.add_gpu_return()
+
         self.mlir_generator.end_function()
         self.current_function = None
 
+    def _is_gpu_kernel_function(self, node: ast.FunctionDef) -> bool:
+        """Check if a function contains GPU-specific operations."""
+        # Simple heuristic: check if function body contains GPU function calls
+        gpu_functions = {"get_bdim_x", "get_bid_x", "get_tid_x", "load", "store"}
+
+        class GPUCallVisitor(ast.NodeVisitor):
+            def __init__(self):
+                self.has_gpu_calls = False
+
+            def visit_Call(self, node):
+                if isinstance(node.func, ast.Name) and node.func.id in gpu_functions:
+                    self.has_gpu_calls = True
+                self.generic_visit(node)
+
+        visitor = GPUCallVisitor()
+        visitor.visit(node)
+        return visitor.has_gpu_calls
+
     def visit_Return(self, node: ast.Return) -> Any:
         """Visit a return statement."""
-        if node.value:
-            value_ssa = self.visit(node.value)
-            self.mlir_generator.add_return(value_ssa)
+        # Check if we're in a GPU kernel function
+        is_gpu_kernel = hasattr(self, "_current_is_gpu") and self._current_is_gpu
+
+        if is_gpu_kernel:
+            # GPU kernels use plain "return"
+            if not node.value:  # Empty return
+                # Don't emit anything, GPU return will be handled at function end
+                pass
+            else:
+                value_ssa = self.visit(node.value)
+                # GPU kernels typically don't return values, but visit the expression anyway
         else:
-            self.mlir_generator.add_return(None)
+            # Regular functions
+            if node.value:
+                value_ssa = self.visit(node.value)
+                self.mlir_generator.add_return(value_ssa)
+            else:
+                self.mlir_generator.add_return(None)
 
     def visit_Assign(self, node: ast.Assign) -> Any:
         """Visit an assignment statement."""
@@ -245,7 +296,29 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         else:
             func_name = "unknown"
 
-        # Visit arguments
+        # Handle GPU-specific function calls for kernel.py support
+        if func_name == "get_bdim_x":
+            return self.mlir_generator.add_gpu_block_dim_x()
+        elif func_name == "get_bid_x":
+            return self.mlir_generator.add_gpu_block_id_x()
+        elif func_name == "get_tid_x":
+            return self.mlir_generator.add_gpu_thread_id_x()
+        elif func_name == "load":
+            # load(ptr, offset)
+            if len(node.args) >= 2:
+                ptr_ssa = self.visit(node.args[0])
+                offset_ssa = self.visit(node.args[1])
+                return self.mlir_generator.add_gpu_load(ptr_ssa, offset_ssa)
+        elif func_name == "store":
+            # store(value, ptr, offset)
+            if len(node.args) >= 3:
+                value_ssa = self.visit(node.args[0])
+                ptr_ssa = self.visit(node.args[1])
+                offset_ssa = self.visit(node.args[2])
+                self.mlir_generator.add_gpu_store(value_ssa, ptr_ssa, offset_ssa)
+                return value_ssa  # Return the stored value as SSA
+
+        # Visit arguments for regular function calls
         arg_ssa_values = []
         for arg in node.args:
             arg_ssa_values.append(self.visit(arg))
