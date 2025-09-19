@@ -46,16 +46,23 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
 
         # Check if this is a GPU kernel function (has GPU-specific calls)
         is_gpu_kernel = self._is_gpu_kernel_function(node)
+        is_math_function = self._is_math_function(node)
         self._current_is_gpu = is_gpu_kernel  # Track for visit_Return
 
         if is_gpu_kernel:
             # For GPU kernels, use pointer types for array arguments
             arg_types = ["!llvm.ptr"] * len(node.args.args)
             return_type = ""  # GPU kernels typically don't return values
+        elif is_math_function:
+            # For math functions, use f32 types
+            arg_types = ["f32"] * len(node.args.args)
+            return_type = "f32"
         else:
             # Regular functions use i32 types
             arg_types = ["i32"] * len(node.args.args)
             return_type = "i32"
+
+        self._current_return_type = return_type  # Track for visit_Return
 
         arg_names = [arg.arg for arg in node.args.args]
 
@@ -85,8 +92,19 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
 
     def _is_gpu_kernel_function(self, node: ast.FunctionDef) -> bool:
         """Check if a function contains GPU-specific operations."""
-        # Simple heuristic: check if function body contains GPU function calls
-        gpu_functions = {"get_bdim_x", "get_bid_x", "get_tid_x", "load", "store"}
+        # GPU functions include both simplified and NVIDIA intrinsic names
+        gpu_functions = {
+            "get_bdim_x",
+            "get_bid_x",
+            "get_tid_x",
+            "load",
+            "store",
+            "__nvvm_read_ptx_sreg_ntid_x",
+            "__nvvm_read_ptx_sreg_ctaid_x",
+            "__nvvm_read_ptx_sreg_tid_x",
+            "__load_from_ptr",
+            "__store_to_ptr",
+        }
 
         class GPUCallVisitor(ast.NodeVisitor):
             def __init__(self):
@@ -100,6 +118,23 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         visitor = GPUCallVisitor()
         visitor.visit(node)
         return visitor.has_gpu_calls
+
+    def _is_math_function(self, node: ast.FunctionDef) -> bool:
+        """Check if a function contains mathematical operations that need f32 types."""
+        math_functions = {"exp", "sigmoid", "sin", "cos", "tan", "sqrt", "log"}
+
+        class MathCallVisitor(ast.NodeVisitor):
+            def __init__(self):
+                self.has_math_calls = False
+
+            def visit_Call(self, node):
+                if isinstance(node.func, ast.Name) and node.func.id in math_functions:
+                    self.has_math_calls = True
+                self.generic_visit(node)
+
+        visitor = MathCallVisitor()
+        visitor.visit(node)
+        return visitor.has_math_calls
 
     def visit_Return(self, node: ast.Return) -> Any:
         """Visit a return statement."""
@@ -118,7 +153,8 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             # Regular functions
             if node.value:
                 value_ssa = self.visit(node.value)
-                self.mlir_generator.add_return(value_ssa)
+                return_type = getattr(self, "_current_return_type", "i32")
+                self.mlir_generator.add_return(value_ssa, return_type)
             else:
                 self.mlir_generator.add_return(None)
 
@@ -303,8 +339,20 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             return self.mlir_generator.add_gpu_block_id_x()
         elif func_name == "get_tid_x":
             return self.mlir_generator.add_gpu_thread_id_x()
+        elif func_name == "__nvvm_read_ptx_sreg_ntid_x":
+            return self.mlir_generator.add_gpu_block_dim_x()
+        elif func_name == "__nvvm_read_ptx_sreg_ctaid_x":
+            return self.mlir_generator.add_gpu_block_id_x()
+        elif func_name == "__nvvm_read_ptx_sreg_tid_x":
+            return self.mlir_generator.add_gpu_thread_id_x()
         elif func_name == "load":
             # load(ptr, offset)
+            if len(node.args) >= 2:
+                ptr_ssa = self.visit(node.args[0])
+                offset_ssa = self.visit(node.args[1])
+                return self.mlir_generator.add_gpu_load(ptr_ssa, offset_ssa)
+        elif func_name == "__load_from_ptr":
+            # __load_from_ptr(ptr, offset)
             if len(node.args) >= 2:
                 ptr_ssa = self.visit(node.args[0])
                 offset_ssa = self.visit(node.args[1])
@@ -317,6 +365,25 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                 offset_ssa = self.visit(node.args[2])
                 self.mlir_generator.add_gpu_store(value_ssa, ptr_ssa, offset_ssa)
                 return value_ssa  # Return the stored value as SSA
+        elif func_name == "__store_to_ptr":
+            # __store_to_ptr(ptr, offset, value)
+            if len(node.args) >= 3:
+                ptr_ssa = self.visit(node.args[0])
+                offset_ssa = self.visit(node.args[1])
+                value_ssa = self.visit(node.args[2])
+                self.mlir_generator.add_gpu_store(value_ssa, ptr_ssa, offset_ssa)
+                return value_ssa  # Return the stored value as SSA
+        # Handle mathematical function calls
+        elif func_name == "exp":
+            # exp(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                return self.mlir_generator.add_math_exp(operand_ssa)
+        elif func_name == "sigmoid":
+            # sigmoid(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                return self.mlir_generator.add_oven_sigmoid(operand_ssa)
 
         # Visit arguments for regular function calls
         arg_ssa_values = []

@@ -160,3 +160,62 @@ def test_memory(src, dst):
         # Check store operation
         assert "oven.store" in mlir_code
         assert "(f32, !llvm.ptr, i32)" in mlir_code
+
+    def test_nvvm_intrinsic_functions(self, compiler):
+        """Test NVIDIA intrinsic functions are correctly translated."""
+        source = """
+def test_intrinsics(a, b):
+    ntid_x = __nvvm_read_ptx_sreg_ntid_x()
+    ctaid_x = __nvvm_read_ptx_sreg_ctaid_x()
+    tid_x = __nvvm_read_ptx_sreg_tid_x()
+    
+    thread_idx = ctaid_x * ntid_x + tid_x
+    value = __load_from_ptr(a, thread_idx)
+    __store_to_ptr(b, thread_idx, value)
+    return
+"""
+        mlir_code = compiler.compile_source(source)
+
+        # Check function signature for GPU kernel
+        assert "func.func @test_intrinsics(%a: !llvm.ptr, %b: !llvm.ptr)" in mlir_code
+
+        # Check NVIDIA intrinsic operations
+        assert "nvvm.read.ptx.sreg.ntid.x : i32" in mlir_code
+        assert "nvvm.read.ptx.sreg.ctaid.x : i32" in mlir_code
+        assert "nvvm.read.ptx.sreg.tid.x : i32" in mlir_code
+
+        # Check memory operations
+        assert "oven.load %a," in mlir_code
+        assert "oven.store" in mlir_code
+
+    def test_math_functions_in_gpu_context(self, compiler):
+        """Test that math functions work correctly when mixed with GPU code."""
+        source = """
+def gpu_with_math(input_ptr, output_ptr):
+    tid = get_tid_x()
+    value = load(input_ptr, tid)
+    return
+
+def pure_math(x):
+    return exp(x)
+
+def math_then_gpu(data, result):
+    tid = get_tid_x()
+    val = load(data, tid)
+    store(val, result, tid)
+    return
+"""
+        mlir_code = compiler.compile_source(source)
+
+        # Check GPU functions have GPU signatures
+        assert "func.func @gpu_with_math(%a: !llvm.ptr, %b: !llvm.ptr)" in mlir_code
+        assert "func.func @math_then_gpu(%a: !llvm.ptr, %b: !llvm.ptr)" in mlir_code
+
+        # Check math function has f32 signature
+        assert "func.func @pure_math(%arg0: f32) -> f32" in mlir_code
+
+        # Check operations are present
+        assert "nvvm.read.ptx.sreg.tid.x" in mlir_code
+        assert "oven.load" in mlir_code
+        assert "oven.store" in mlir_code
+        assert "math.exp" in mlir_code

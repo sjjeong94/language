@@ -129,10 +129,10 @@ class MLIRGenerator:
         self._emit(f"{ssa_val} = arith.cmpi {predicate}, {lhs}, {rhs} : {operand_type}")
         return ssa_val
 
-    def add_return(self, value: Optional[str] = None) -> None:
+    def add_return(self, value: Optional[str] = None, return_type: str = "i32") -> None:
         """Add a return operation."""
         if value:
-            self._emit(f"func.return {value} : i32")
+            self._emit(f"func.return {value} : {return_type}")
         else:
             self._emit("func.return")
 
@@ -281,3 +281,18 @@ class MLIRGenerator:
     def add_gpu_return(self) -> None:
         """Add GPU return operation."""
         self._emit("return")
+
+    # Mathematical operations
+    def add_math_exp(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.exp operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.exp {operand} : {operand_type}")
+        return ssa_val
+
+    def add_oven_sigmoid(self, operand: str, operand_type: str = "f32") -> str:
+        """Add oven.sigmoid operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(
+            f"{ssa_val} = oven.sigmoid {operand} : {operand_type} -> {operand_type}"
+        )
+        return ssa_val
