@@ -86,6 +86,24 @@ def get_bdim_x():
     raise NotImplementedError("This function is compiled to MLIR operations")
 
 
+def smem():
+    """
+    Allocate shared memory for GPU computations.
+
+    Returns:
+        Shared memory pointer (!llvm.ptr<3>)
+    """
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def barrier():
+    """
+    Synchronization barrier for GPU threads.
+    Ensures all threads in a block reach this point before continuing.
+    """
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
 # Mathematical Operations
 def exp(x):
     """

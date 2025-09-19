@@ -1,6 +1,41 @@
 # Python Type Hints Support
 
-The Oven compiler now supports Python type hints to specify MLIR types for function parameters and return values. This allows for more precise control over the generated MLIR code.
+The Oven compiler### Example 3: GPU Kernel with Pointers and Shared Memory
+```python
+import oven.language as ol
+
+def gpu_kernel(input_ptr: ol.ptr, output_ptr: ol.ptr):
+    # Allocate shared memory
+    smem = ol.smem()
+    
+    tid = ol.get_tid_x()
+    value = ol.load(input_ptr, tid)
+    
+    # Store to shared memory
+    ol.store(value, smem, tid)
+    
+    # Synchronize threads
+    ol.barrier()
+    
+    # Load from shared memory and store to output
+    shared_value = ol.load(smem, tid)
+    ol.store(shared_value * 2.0, output_ptr, tid)
+```
+Generates:
+```mlir
+func.func @gpu_kernel(%a: !llvm.ptr, %b: !llvm.ptr) {
+  %smem = oven.smem : !llvm.ptr<3>
+  %0 = nvvm.read.ptx.sreg.tid.x : i32
+  %1 = oven.load %a, %0 : (!llvm.ptr, i32) -> f32
+  oven.store %1, %smem, %0 : (f32, !llvm.ptr<3>, i32)
+  nvvm.barrier0
+  %2 = oven.load %smem, %0 : (!llvm.ptr<3>, i32) -> f32
+  %3 = arith.constant 2.0 : f32
+  %4 = arith.mulf %2, %3 : f32
+  oven.store %4, %b, %0 : (f32, !llvm.ptr, i32)
+  return
+}
+``` type hints to specify MLIR types for function parameters and return values. This allows for more precise control over the generated MLIR code.
 
 ## Supported Type Hints
 

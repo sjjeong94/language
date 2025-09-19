@@ -140,6 +140,8 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             "get_tid_y",
             "load",
             "store",
+            "smem",
+            "barrier",
             "load_input_x",
             "load_input_y",
             "store_output_x",
@@ -168,6 +170,11 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                         if attr_name in [
                             "load",
                             "store",
+                            "smem",
+                            "barrier",
+                            "nvvm_read_ptx_sreg_ntid_x",
+                            "nvvm_read_ptx_sreg_ctaid_x", 
+                            "nvvm_read_ptx_sreg_tid_x",
                             "load_input_x",
                             "load_input_y",
                             "store_output_x",
@@ -616,9 +623,15 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             return self.mlir_generator.add_gpu_thread_id_y()
         elif func_name == "__nvvm_read_ptx_sreg_ntid_x":
             return self.mlir_generator.add_gpu_block_dim_x()
+        elif func_name in ["nvvm_read_ptx_sreg_ntid_x", "oven_lang_nvvm_read_ptx_sreg_ntid_x"]:
+            return self.mlir_generator.add_gpu_block_dim_x()
         elif func_name == "__nvvm_read_ptx_sreg_ctaid_x":
             return self.mlir_generator.add_gpu_block_id_x()
+        elif func_name in ["nvvm_read_ptx_sreg_ctaid_x", "oven_lang_nvvm_read_ptx_sreg_ctaid_x"]:
+            return self.mlir_generator.add_gpu_block_id_x()
         elif func_name == "__nvvm_read_ptx_sreg_tid_x":
+            return self.mlir_generator.add_gpu_thread_id_x()
+        elif func_name in ["nvvm_read_ptx_sreg_tid_x", "oven_lang_nvvm_read_ptx_sreg_tid_x"]:
             return self.mlir_generator.add_gpu_thread_id_x()
         elif func_name in ["load", "oven_lang_load"]:
             # load(ptr, offset)
@@ -648,6 +661,13 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                 value_ssa = self.visit(node.args[2])
                 self.mlir_generator.add_gpu_store(value_ssa, ptr_ssa, offset_ssa)
                 return value_ssa  # Return the stored value as SSA
+        elif func_name in ["smem", "oven_lang_smem"]:
+            # smem() - allocate shared memory
+            return self.mlir_generator.add_gpu_smem()
+        elif func_name in ["barrier", "oven_lang_barrier"]:
+            # barrier() - synchronization barrier
+            self.mlir_generator.add_gpu_barrier()
+            return None  # barrier doesn't return a value
         # Handle mathematical function calls
         elif func_name in ["exp", "oven_lang_exp"]:
             # exp(value)

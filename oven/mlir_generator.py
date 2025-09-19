@@ -290,6 +290,16 @@ class MLIRGenerator:
             f"oven.store {value}, {ptr}, {offset} : ({value_type}, !llvm.ptr, i32)"
         )
 
+    def add_gpu_smem(self) -> str:
+        """Add GPU shared memory allocation operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = oven.smem : !llvm.ptr<3>")
+        return ssa_val
+
+    def add_gpu_barrier(self) -> None:
+        """Add GPU barrier synchronization operation."""
+        self._emit("nvvm.barrier0")
+
     def add_gpu_return(self) -> None:
         """Add GPU return operation."""
         self._emit("return")
