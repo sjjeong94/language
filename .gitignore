@@ -1,2 +1,29 @@
+# Python cache files
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Testing
 .coverage
+.pytest_cache/
+
+# Build artifacts
+*.mlir
+build/
+dist/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# OS files
+.DS_Store
+Thumbs.db

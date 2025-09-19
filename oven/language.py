@@ -201,6 +201,27 @@ def addf(a, b):
     raise NotImplementedError("This function is compiled to MLIR operations")
 
 
+# Input/Output Operations
+def load_input_x(index):
+    """Load value from input buffer x at specified index."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def store_output_x(value, index):
+    """Store value to output buffer x at specified index."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def load_input_y(index):
+    """Load value from input buffer y at specified index."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def store_output_y(value, index):
+    """Store value to output buffer y at specified index."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
 # Type Conversion
 def index_cast(value, from_type, to_type):
     """Cast between index and integer types."""

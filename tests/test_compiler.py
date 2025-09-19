@@ -14,42 +14,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from oven.compiler import PythonToMLIRCompiler, CompilationError, compile_python_string
 from oven.ast_visitor import PythonToMLIRASTVisitor
 from oven.mlir_generator import MLIRGenerator
-from oven.utils.mlir_utils import MLIRUtils
-
-
-@pytest.mark.unit
-class TestMLIRUtils:
-    """Test MLIR utility functions."""
-
-    def setup_method(self):
-        self.utils = MLIRUtils()
-
-    def test_python_type_to_mlir(self):
-        """Test Python to MLIR type conversion."""
-        assert MLIRUtils.python_type_to_mlir("int") == "i32"
-        assert MLIRUtils.python_type_to_mlir("float") == "f32"
-        assert MLIRUtils.python_type_to_mlir("bool") == "i1"
-        assert MLIRUtils.python_type_to_mlir("str") == "!llvm.ptr<i8>"
-
-    def test_ssa_name_validation(self):
-        """Test SSA value name validation."""
-        assert MLIRUtils.is_valid_ssa_name("%0") is True
-        assert MLIRUtils.is_valid_ssa_name("%result") is True
-        assert MLIRUtils.is_valid_ssa_name("0") is False
-        assert MLIRUtils.is_valid_ssa_name("%") is False
-
-    def test_block_label_validation(self):
-        """Test block label validation."""
-        assert MLIRUtils.is_valid_block_label("^bb0") is True
-        assert MLIRUtils.is_valid_block_label("^label") is True
-        assert MLIRUtils.is_valid_block_label("bb0") is False
-        assert MLIRUtils.is_valid_block_label("^") is False
-
-    def test_sanitize_identifier(self):
-        """Test identifier sanitization."""
-        assert MLIRUtils.sanitize_identifier("valid_name") == "valid_name"
-        assert MLIRUtils.sanitize_identifier("invalid-name") == "invalid_name"
-        assert MLIRUtils.sanitize_identifier("123invalid") == "_123invalid"
 
 
 @pytest.mark.unit

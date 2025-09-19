@@ -11,7 +11,6 @@ import os
 from typing import Optional, Dict, Any, List
 from .ast_visitor import PythonToMLIRASTVisitor
 from .mlir_generator import MLIRGenerator
-from .utils.mlir_utils import MLIRUtils
 
 
 class PythonToMLIRCompiler:
@@ -32,7 +31,6 @@ class PythonToMLIRCompiler:
         """
         self.debug = debug
         self.optimize = optimize
-        self.utils = MLIRUtils()
         self.compilation_errors: List[str] = []
 
     def compile_source(self, source_code: str, filename: str = "<string>") -> str:
@@ -63,14 +61,6 @@ class PythonToMLIRCompiler:
 
             # Convert AST to MLIR
             mlir_code = self.compile_ast(python_ast)
-
-            # Validate generated MLIR
-            if self.debug:
-                validation_errors = self.utils.validate_mlir_syntax(mlir_code)
-                if validation_errors:
-                    print("MLIR validation warnings:")
-                    for error in validation_errors:
-                        print(f"  {error}")
 
             return mlir_code
 

@@ -6,7 +6,6 @@ Provides utilities for creating MLIR operations, blocks, and functions.
 """
 
 from typing import List, Optional, Dict, Any
-from .utils.mlir_utils import MLIRUtils
 
 
 class MLIRGenerator:
@@ -22,7 +21,6 @@ class MLIRGenerator:
         self.ssa_counter = 0
         self.label_counter = 0
         self.indent_level = 0
-        self.utils = MLIRUtils()
 
     def _emit(self, line: str, extra_indent: int = 0) -> None:
         """Emit a line of MLIR code with proper indentation."""
