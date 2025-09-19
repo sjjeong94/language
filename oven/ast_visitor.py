@@ -21,6 +21,7 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
     def __init__(self):
         self.mlir_generator = MLIRGenerator()
         self.symbol_table: Dict[str, str] = {}  # Maps variable names to MLIR SSA values
+        self.symbol_types: Dict[str, str] = {}  # Maps variable names to MLIR types
         self.current_function: Optional[str] = None
         self.indent_level = 0
         self.imports: Dict[str, str] = {}  # Maps import aliases to module names
@@ -35,6 +36,22 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         if name not in self.symbol_table:
             self.symbol_table[name] = self.mlir_generator.get_next_ssa_value()
         return self.symbol_table[name]
+
+    def _get_symbol_type(self, name: str) -> str:
+        """Get the MLIR type of a symbol."""
+        if name in self.symbol_types:
+            return self.symbol_types[name]
+        # Default fallback
+        return "i32"
+
+    def _infer_type_from_ssa(self, ssa_val: str) -> str:
+        """Infer type from SSA value by looking up in symbol tables."""
+        # Find the variable name that maps to this SSA value
+        for var_name, var_ssa in self.symbol_table.items():
+            if var_ssa == ssa_val:
+                return self._get_symbol_type(var_name)
+        # Default fallback
+        return "i32"
 
     def visit_Module(self, node: ast.Module) -> Any:
         """Visit a module node (top-level of Python file)."""
@@ -77,18 +94,11 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         self._current_is_gpu = is_gpu_kernel  # Track for visit_Return
         self._current_is_math = is_math_function  # Track for arithmetic operations
 
-        if is_gpu_kernel:
-            # For GPU kernels, use pointer types for array arguments
-            arg_types = ["!llvm.ptr"] * len(node.args.args)
-            return_type = ""  # GPU kernels typically don't return values
-        elif is_math_function:
-            # For math functions, use f32 types
-            arg_types = ["f32"] * len(node.args.args)
-            return_type = "f32"
-        else:
-            # Regular functions use i32 types
-            arg_types = ["i32"] * len(node.args.args)
-            return_type = "i32"
+        # Get argument types from type annotations or infer from context
+        arg_types = self._get_argument_types(node)
+
+        # Get return type from type annotation or infer from context
+        return_type = self._get_return_type(node, is_gpu_kernel, is_math_function)
 
         self._current_return_type = return_type  # Track for visit_Return
 
@@ -100,13 +110,14 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         else:
             self.mlir_generator.start_function(node.name, arg_types, return_type)
 
-        # Map arguments to SSA values
-        for i, arg_name in enumerate(arg_names):
+        # Map arguments to SSA values and track their types
+        for i, (arg_name, arg_type) in enumerate(zip(arg_names, arg_types)):
             if is_gpu_kernel:
                 ssa_val = f"%{chr(97+i)}"  # %a, %b, %c, etc. for GPU functions
             else:
                 ssa_val = f"%arg{i}"  # %arg0, %arg1, etc. for regular functions
             self.symbol_table[arg_name] = ssa_val
+            self.symbol_types[arg_name] = arg_type
 
         # Visit function body
         for stmt in node.body:
@@ -205,6 +216,76 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         visitor = MathCallVisitor()
         visitor.visit(node)
         return visitor.has_math_calls
+
+    def _parse_type_annotation(self, annotation) -> str:
+        """Parse a Python type annotation to MLIR type string."""
+        if annotation is None:
+            return None
+
+        # Handle simple name annotations (int, f32, etc.)
+        if isinstance(annotation, ast.Name):
+            type_name = annotation.id
+            type_mapping = {"int": "i32", "i32": "i32", "f32": "f32", "index": "index"}
+            return type_mapping.get(type_name, "i32")  # Default to i32
+
+        # Handle attribute annotations (ol.ptr, ol.f32, etc.)
+        elif isinstance(annotation, ast.Attribute):
+            if isinstance(annotation.value, ast.Name):
+                module_name = annotation.value.id
+                attr_name = annotation.attr
+
+                # Handle oven.language types (ol.ptr, ol.f32, etc.)
+                if module_name == "ol":
+                    type_mapping = {
+                        "ptr": "!llvm.ptr",
+                        "f32": "f32",
+                        "i32": "i32",
+                        "index": "index",
+                    }
+                    return type_mapping.get(attr_name, "i32")
+
+        # Default fallback
+        return "i32"
+
+    def _get_argument_types(self, node: ast.FunctionDef) -> list[str]:
+        """Get argument types from type annotations or infer from context."""
+        arg_types = []
+
+        # Check if this is a GPU kernel function or math function
+        is_gpu_kernel = self._is_gpu_kernel_function(node)
+        is_math_function = self._is_math_function(node)
+
+        for arg in node.args.args:
+            # Try to get type from annotation first
+            if arg.annotation:
+                mlir_type = self._parse_type_annotation(arg.annotation)
+                arg_types.append(mlir_type)
+            else:
+                # Fall back to context-based inference
+                if is_gpu_kernel:
+                    arg_types.append("!llvm.ptr")
+                elif is_math_function:
+                    arg_types.append("f32")
+                else:
+                    arg_types.append("i32")
+
+        return arg_types
+
+    def _get_return_type(
+        self, node: ast.FunctionDef, is_gpu_kernel: bool, is_math_function: bool
+    ) -> str:
+        """Get return type from type annotation or infer from context."""
+        # Try to get type from annotation first
+        if node.returns:
+            return self._parse_type_annotation(node.returns)
+
+        # Fall back to context-based inference
+        if is_gpu_kernel:
+            return ""  # GPU kernels typically don't return values
+        elif is_math_function:
+            return "f32"
+        else:
+            return "i32"
 
     def visit_Return(self, node: ast.Return) -> Any:
         """Visit a return statement."""
@@ -672,37 +753,36 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
     def _generate_arithmetic_op(
         self, op: str, left_ssa: str, right_ssa: str, force_float: bool = False
     ) -> str:
-        """Generate appropriate arithmetic operation based on context."""
-        # Enhanced heuristic: analyze the context more carefully
+        """Generate appropriate arithmetic operation based on operand types."""
 
-        is_gpu_context = hasattr(self, "_current_is_gpu") and self._current_is_gpu
-        is_math_context = hasattr(self, "_current_is_math") and self._current_is_math
-
-        # Strategy: In GPU context, use float operations for data values,
-        # but keep integer operations for pure index calculations
-
-        def involves_loaded_data(ssa_val: str) -> bool:
-            """Check if SSA value comes from loaded data or data operations."""
-            # This is a simplified heuristic. In a real implementation,
-            # you'd track the data flow more carefully.
-            # For now, we'll check if the value comes from a load operation
-            # by looking at recent operations in the generator
-            if hasattr(self.mlir_generator, "_recent_load_values"):
-                return ssa_val in self.mlir_generator._recent_load_values
-            return False
+        # Get types of the operands
+        left_type = self._infer_type_from_ssa(left_ssa)
+        right_type = self._infer_type_from_ssa(right_ssa)
 
         # Determine if we should use float operations
         if force_float:
             use_float = True
-        elif is_math_context:
+        elif left_type == "f32" or right_type == "f32":
+            # If either operand is float, use float operation
             use_float = True
-        elif is_gpu_context:
-            # In GPU context, use float for data operations
-            # For now, we'll default to float operations in GPU context
-            # since most GPU kernels work with floating point data
-            use_float = True
-        else:
+        elif left_type == "!llvm.ptr" or right_type == "!llvm.ptr":
+            # Pointer arithmetic should use integer operations
             use_float = False
+        else:
+            # Enhanced heuristic: analyze the context as fallback
+            is_gpu_context = hasattr(self, "_current_is_gpu") and self._current_is_gpu
+            is_math_context = (
+                hasattr(self, "_current_is_math") and self._current_is_math
+            )
+
+            if is_math_context:
+                use_float = True
+            elif is_gpu_context:
+                # In GPU context, default to float for data operations
+                use_float = True
+            else:
+                # For regular functions, use integer operations unless types suggest otherwise
+                use_float = False
 
         # Generate the appropriate operation
         if use_float:

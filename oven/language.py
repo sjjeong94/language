@@ -6,6 +6,31 @@ that can be compiled to MLIR.
 """
 
 
+# Type hints for MLIR compilation
+class ptr:
+    """Pointer type for MLIR compilation (!llvm.ptr)."""
+
+    pass
+
+
+class f32:
+    """32-bit floating point type (f32)."""
+
+    pass
+
+
+class i32:
+    """32-bit integer type (i32)."""
+
+    pass
+
+
+class index:
+    """Index type for MLIR (index)."""
+
+    pass
+
+
 # GPU Memory Operations
 def load(ptr, offset):
     """
