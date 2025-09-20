@@ -119,6 +119,14 @@ compiler = PythonToMLIRCompiler(debug=True, optimize=True)
 mlir_code = compiler.compile_file("input.py")
 ```
 
+## Documentation
+
+📚 **[Complete API Documentation](docs/OVEN_LANGUAGE_API.md)** - 모든 Oven Language 함수의 상세한 설명
+
+🚀 **[Quick Reference Guide](docs/OVEN_LANGUAGE_QUICK_REFERENCE.md)** - 주요 함수들의 간단한 참조
+
+📖 **[Type Hints Guide](docs/type_hints.md)** - MLIR 타입 힌트 사용법
+
 ## Testing
 
 이 프로젝트는 pytest 기반의 포괄적인 테스트 스위트를 제공합니다.
