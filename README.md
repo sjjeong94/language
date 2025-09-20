@@ -1,287 +1,201 @@
-# Oven Compiler - Python to MLIR
+# Oven Compiler
 
-A Python compiler that converts Python source code to MLIR (Multi-Level Intermediate Representation) with support for GPU operations and mathematical functions.
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI version](https://badge.fury.io/py/oven-compiler.svg)](https://badge.fury.io/py/oven-compiler)
+
+A Python-to-MLIR compiler that enables GPU kernel development and mathematical computing with high-level Python syntax.
 
 ## Features
 
-- **Python AST 활용**: Python의 내장 AST 모듈을 사용하여 소스 코드를 파싱
-- **GPU 연산 지원**: NVIDIA GPU 커널 및 메모리 연산 지원 (nvvm, oven 다이얼렉트)
-- **수학 함수 지원**: exp, sigmoid 등 수학 함수의 MLIR 변환
-- **Triton 스타일 API**: `import oven.language as ol` 구조로 체계적인 함수 호출
-- **MLIR 생성**: 표준 MLIR 연산들을 생성 (func, arith, cf, memref, math 다이얼렉트 지원)
-- **명령행 인터페이스**: `oven compile` 명령어로 간편한 컴파일
-- **테스트 지원**: Pytest 기반의 포괄적인 테스트 스위트 (104개 테스트)
+- **GPU Kernel Compilation**: Write GPU kernels in Python and compile to MLIR
+- **Vector Operations**: Built-in support for vectorized memory operations (`vload`, `vstore`)
+- **Mathematical Functions**: Hardware-accelerated math functions (exp, sigmoid, etc.)
+- **Type Safety**: Strong type inference and MLIR type system integration
+- **Clean API**: Triton-inspired syntax with `import oven.language as ol`
+- **Command Line Tools**: Simple compilation workflow with `oven compile`
 
 ## Installation
 
 ```bash
-# Install from source
-pip install -e .
-
-# Or install development dependencies
-pip install -e .[dev]
+pip install oven-compiler
 ```
 
 ## Quick Start
 
-### Command Line Usage
-
-```bash
-# Compile a Python file to MLIR
-oven compile kernel.py
-
-# Specify output file
-oven compile kernel.py -o output.mlir
-
-# Enable debug mode
-oven compile kernel.py --debug
-
-# Show version
-oven --version
-
-# Alternative module syntax
-python -m oven compile kernel.py
-```
-
-### Programming API
+### GPU Kernel Example
 
 ```python
 import oven.language as ol
 
-# GPU kernel example
-def gpu_kernel(input_ptr, output_ptr):
+def vector_add_kernel(a_ptr: ol.ptr, b_ptr: ol.ptr, out_ptr: ol.ptr):
+    """Element-wise vector addition on GPU."""
     tid = ol.get_tid_x()
-    value = ol.load(input_ptr, tid)
-    result = ol.exp(value)
-    ol.store(result, output_ptr, tid)
+    bid = ol.get_bid_x()
+    
+    idx = bid * ol.get_bdim_x() + tid
+    offset = idx * 4
+    
+    # Load vectors (4 elements each)
+    vec_a = ol.vload(a_ptr, offset, 4)
+    vec_b = ol.vload(b_ptr, offset, 4)
+    
+    # Vector addition
+    result = vec_a + vec_b
+    
+    # Store result
+    ol.vstore(result, out_ptr, offset, 4)
 
-# Mathematical function example  
-def math_function(x):
-    return ol.sigmoid(ol.exp(x))
+def math_pipeline_kernel(input_ptr: ol.ptr, output_ptr: ol.ptr):
+    """Mathematical transformation pipeline."""
+    tid = ol.get_tid_x()
+    offset = tid * 4
+    
+    # Load data
+    data = ol.vload(input_ptr, offset, 4)
+    
+    # Apply transformations
+    data = ol.sigmoid(data)  # Sigmoid activation
+    data = ol.exp(data)      # Exponential
+    
+    # Store result
+    ol.vstore(data, output_ptr, offset, 4)
 ```
 
-## Project Structure
+### Compilation
 
-```
-oven-compiler/
-├── oven/                   # Main package
-│   ├── __init__.py
-│   ├── __main__.py         # Module entry point
-│   ├── cli.py              # Command line interface
-│   ├── language.py         # GPU and math function definitions
-│   ├── ast_visitor.py      # AST visitor pattern implementation
-│   ├── mlir_generator.py   # MLIR code generation
-│   ├── compiler.py         # Main compiler interface
-│   └── utils/
-│       ├── __init__.py
-│       └── mlir_utils.py   # MLIR utility functions
-├── tests/                  # Test suite (104 tests)
-│   ├── conftest.py         # Pytest fixtures and configuration
-│   ├── test_compiler.py    # Main compiler tests
-│   ├── test_gpu_kernel.py  # GPU functionality tests
-│   ├── test_math_functions.py # Mathematical function tests
-│   ├── test_oven_import.py # Import structure tests
-│   └── test_parametrized.py # Parametrized tests
-├── pyproject.toml          # Package configuration
-└── README.md
-```
-│       ├── sample.py       # Basic examples
-│       └── complex.py      # Complex examples
-├── pyproject.toml          # Pytest configuration
-├── Makefile               # Build and test automation
-├── requirements.txt
-└── main.py                # CLI entry point
-```
-
-## Usage
-
-### Command Line Interface
 ```bash
-# Basic compilation
-python main.py input.py -o output.mlir
+# Compile to MLIR
+oven compile kernel.py
 
-# Debug mode
-python main.py input.py --debug
+# Specify output file
+oven compile kernel.py -o kernel.mlir
 
-# Disable optimizations
-python main.py input.py --no-optimize
+# Enable debug output
+oven compile kernel.py --debug
 ```
 
-### Programming Interface
+### Generated MLIR
+
+```mlir
+func.func @vector_add_kernel(%a_ptr: !llvm.ptr, %b_ptr: !llvm.ptr, %out_ptr: !llvm.ptr) {
+  %0 = nvvm.read.ptx.sreg.tid.x : i32
+  %1 = nvvm.read.ptx.sreg.ctaid.x : i32
+  %2 = nvvm.read.ptx.sreg.ntid.x : i32
+  %3 = arith.muli %1, %2 : i32
+  %4 = arith.addi %3, %0 : i32
+  %5 = arith.constant 4 : i32
+  %6 = arith.muli %4, %5 : i32
+  %7 = oven.vload %a_ptr, %6, 4 : (!llvm.ptr, i32) -> vector<4xf32>
+  %8 = oven.vload %b_ptr, %6, 4 : (!llvm.ptr, i32) -> vector<4xf32>
+  %9 = arith.addf %7, %8 : vector<4xf32>
+  oven.vstore %9, %out_ptr, %6, 4 : (vector<4xf32>, !llvm.ptr, i32)
+  return
+}
+```
+
+## API Reference
+
+### GPU Operations
+
+| Function                            | Description                       | MLIR Output                  |
+| ----------------------------------- | --------------------------------- | ---------------------------- |
+| `ol.get_tid_x()`                    | Get thread ID (X dimension)       | `nvvm.read.ptx.sreg.tid.x`   |
+| `ol.get_bid_x()`                    | Get block ID (X dimension)        | `nvvm.read.ptx.sreg.ctaid.x` |
+| `ol.get_bdim_x()`                   | Get block dimension (X dimension) | `nvvm.read.ptx.sreg.ntid.x`  |
+| `ol.load(ptr, offset)`              | Load scalar value                 | `oven.load`                  |
+| `ol.store(value, ptr, offset)`      | Store scalar value                | `oven.store`                 |
+| `ol.vload(ptr, offset, size)`       | Load vector                       | `oven.vload`                 |
+| `ol.vstore(vec, ptr, offset, size)` | Store vector                      | `oven.vstore`                |
+| `ol.smem()`                         | Allocate shared memory            | `oven.smem`                  |
+| `ol.barrier()`                      | Thread synchronization            | `nvvm.barrier0`              |
+
+### Mathematical Functions
+
+| Function        | Description          | MLIR Output    |
+| --------------- | -------------------- | -------------- |
+| `ol.exp(x)`     | Exponential function | `math.exp`     |
+| `ol.sigmoid(x)` | Sigmoid activation   | `oven.sigmoid` |
+| `ol.sin(x)`     | Sine function        | `math.sin`     |
+| `ol.cos(x)`     | Cosine function      | `math.cos`     |
+| `ol.sqrt(x)`    | Square root          | `math.sqrt`    |
+| `ol.log(x)`     | Natural logarithm    | `math.log`     |
+
+### Vector Operations
+
+- **Supported sizes**: 2, 4 elements
+- **Element types**: f32 (single precision float)
+- **Operations**: Addition, subtraction, multiplication, division
+- **Functions**: All mathematical functions support vector inputs
+
+## Type System
+
 ```python
-from src.compiler import compile_python_string, PythonToMLIRCompiler
+import oven.language as ol
 
-# Simple usage
-mlir_code = compile_python_string("def add(a, b): return a + b")
-
-# Advanced usage
-compiler = PythonToMLIRCompiler(debug=True, optimize=True)
-mlir_code = compiler.compile_file("input.py")
+def typed_kernel(input_ptr: ol.ptr, output_ptr: ol.ptr, n: int):
+    """Example with explicit type hints."""
+    tid: int = ol.get_tid_x()
+    
+    if tid < n:
+        value: float = ol.load(input_ptr, tid)
+        result: float = ol.exp(value)
+        ol.store(result, output_ptr, tid)
 ```
 
-## Documentation
-
-📚 **[Complete API Documentation](docs/OVEN_LANGUAGE_API.md)** - 모든 Oven Language 함수의 상세한 설명
-
-🚀 **[Quick Reference Guide](docs/OVEN_LANGUAGE_QUICK_REFERENCE.md)** - 주요 함수들의 간단한 참조
-
-📖 **[Type Hints Guide](docs/type_hints.md)** - MLIR 타입 힌트 사용법
-
-## Testing
-
-이 프로젝트는 pytest 기반의 포괄적인 테스트 스위트를 제공합니다.
+## Development
 
 ### Running Tests
 
 ```bash
-# All tests
-make test
-# 또는
-pytest tests/ -v
+# Install development dependencies
+pip install -e .[dev]
 
-# Unit tests only
-make test-unit
-# 또는  
-pytest tests/ -v -m unit
+# Run all tests
+pytest
 
-# Integration tests only
-make test-integration
-# 또는
-pytest tests/ -v -m integration
-
-# With coverage
-make test-coverage
-# 또는
-pytest tests/ --cov=src --cov-report=html
-
-# Fast tests (exclude slow tests)
-make test-fast
-# 또는
-pytest tests/ -v -m "not slow"
+# Run with coverage
+pytest --cov=oven --cov-report=html
 ```
 
-### Test Structure
+### Project Structure
 
-- **Unit Tests**: 개별 컴포넌트 테스트 (MLIRUtils, MLIRGenerator, ASTVisitor, Compiler)
-- **Integration Tests**: 전체 파이프라인 테스트
-- **Parametrized Tests**: 다양한 입력에 대한 체계적 테스트
-- **Fixtures**: 재사용 가능한 테스트 설정 및 데이터
-
-### Test Coverage
-
-현재 테스트 커버리지:
-- 총 69개 테스트 케이스
-- 전체 코드 커버리지: 62%
-- 핵심 기능 커버리지: 80%+
+```
+oven-compiler/
+├── oven/                    # Main package
+│   ├── language.py          # GPU and math function definitions
+│   ├── compiler.py          # Main compiler interface
+│   ├── ast_visitor.py       # AST processing
+│   ├── mlir_generator.py    # MLIR code generation
+│   └── cli.py              # Command line interface
+├── tests/                   # Test suite
+└── docs/                    # Documentation
+```
 
 ## Requirements
 
 - Python 3.8+
-- pytest (개발용)
-- pytest-cov (커버리지 리포트용)
-
-## Installation
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd compiler
-
-# Set up virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run tests to verify installation
-make test
-```
-
-## Examples
-
-### Input Python Code
-```python
-def add(a, b):
-    return a + b
-
-def factorial(n):
-    if n <= 1:
-        return 1
-    else:
-        return n * factorial(n - 1)
-```
-
-### Generated MLIR Code
-```mlir
-// Generated MLIR code from Python source
-func.func @add(%arg0: i32, %arg1: i32) -> i32 {
-  %0 = arith.addi %arg0, %arg1 : i32
-  func.return %0 : i32
-}
-func.func @factorial(%arg0: i32) -> i32 {
-  %1 = arith.constant 1 : i32
-  %2 = arith.cmpi sle, %arg0, %1 : i32
-  cf.cond_br %2, ^then0, ^else1
-then0:
-  %3 = arith.constant 1 : i32
-  func.return %3 : i32
-  cf.br ^if_end2
-else1:
-  %4 = arith.constant 1 : i32
-  %5 = arith.subi %arg0, %4 : i32
-  %6 = func.call @factorial(%5) : (i32) -> i32
-  %7 = arith.muli %arg0, %6 : i32
-  func.return %7 : i32
-  cf.br ^if_end2
-if_end2:
-}
-```
-
-## Supported Python Features
-
-### ✅ Fully Supported
-- Function definitions (def)
-- Basic data types (int, float, bool, string)
-- Arithmetic operations (+, -, *, /, %)
-- Comparison operations (==, !=, <, <=, >, >=)
-- Control flow (if/else, while)
-- Function calls
-- Variable assignment
-- Constants
-
-### 🔄 Partially Supported
-- for loops (basic structure)
-- Unary operations (+, -, not)
-
-### ❌ Not Supported (Future Extensions)
-- Classes and objects
-- Complex data structures (lists, dictionaries)
-- Exception handling (try/except)
-- Lambda functions
-- Generators
-
-## Development
-
-### Available Make Commands
-
-```bash
-make help           # Show all available commands
-make test           # Run all tests
-make test-unit      # Run unit tests only
-make test-coverage  # Run tests with coverage
-make clean          # Clean generated files
-make compile-example # Compile sample examples
-```
-
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass: `make test`
-5. Submit a pull request
+- No runtime dependencies for basic usage
+- Development: pytest, pytest-cov
 
 ## License
 
-[Add your license information here]
+MIT License. See [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Add tests for new functionality
+5. Ensure all tests pass (`pytest`)
+6. Commit your changes (`git commit -m 'Add amazing feature'`)
+7. Push to the branch (`git push origin feature/amazing-feature`)
+8. Open a Pull Request
+
+## Links
+
+- **Documentation**: [Complete API Documentation](docs/OVEN_LANGUAGE_API.md)
+- **GitHub**: [https://github.com/sjjeong94/language](https://github.com/sjjeong94/language)
+- **PyPI**: [https://pypi.org/project/oven-compiler/](https://pypi.org/project/oven-compiler/)
+- **Issues**: [GitHub Issues](https://github.com/sjjeong94/language/issues)

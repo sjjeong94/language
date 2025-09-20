@@ -60,6 +60,48 @@ def store(value, ptr, offset):
     raise NotImplementedError("This function is compiled to MLIR operations")
 
 
+def vload(ptr, offset, size):
+    """
+    Vectorized load operation from GPU memory.
+
+    Loads a vector of values from GPU memory at the specified offset.
+    The size parameter determines the vector width and is used as an attribute.
+
+    Args:
+        ptr: Memory pointer (!llvm.ptr)
+        offset: Offset index (i32)
+        size: Vector size (attribute, e.g., 4 for vector<4xf32>)
+
+    Returns:
+        Vector of loaded values (vector<SIZExf32>)
+
+    MLIR equivalent:
+        %result = oven.vload %ptr, %offset, SIZE : (!llvm.ptr, i32) -> vector<SIZExf32>
+    """
+    # This function is a placeholder - actual implementation happens during MLIR compilation
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def vstore(vector, ptr, offset, size):
+    """
+    Vectorized store operation to GPU memory.
+
+    Stores a vector of values to GPU memory at the specified offset.
+    The size parameter determines the vector width and is used as an attribute.
+
+    Args:
+        vector: Vector value to store (vector<SIZExf32>)
+        ptr: Memory pointer (!llvm.ptr)
+        offset: Offset index (i32)
+        size: Vector size (attribute, e.g., 4 for vector<4xf32>)
+
+    MLIR equivalent:
+        oven.vstore %vector, %ptr, %offset, SIZE : (vector<SIZExf32>, !llvm.ptr, i32)
+    """
+    # This function is a placeholder - actual implementation happens during MLIR compilation
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
 # GPU Thread and Block Operations
 def get_tid_x():
     """Get the current thread ID in the X dimension."""

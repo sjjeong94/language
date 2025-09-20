@@ -303,6 +303,32 @@ class MLIRGenerator:
             f"oven.store {value}, {ptr}, {offset} : ({value_type}, {ptr_type}, i32)"
         )
 
+    def add_gpu_vload(
+        self, ptr: str, offset: str, size: int, result_type: str = "f32"
+    ) -> str:
+        """Add GPU vectorized load operation."""
+        ssa_val = self.get_next_ssa_value()
+        vector_type = f"vector<{size}x{result_type}>"
+        self._emit(
+            f"{ssa_val} = oven.vload {ptr}, {offset}, {size} : (!llvm.ptr, i32) -> {vector_type}"
+        )
+        return ssa_val
+
+    def add_gpu_vstore(
+        self,
+        vector: str,
+        ptr: str,
+        offset: str,
+        size: int,
+        value_type: str = "f32",
+        ptr_type: str = "!llvm.ptr",
+    ) -> None:
+        """Add GPU vectorized store operation."""
+        vector_type = f"vector<{size}x{value_type}>"
+        self._emit(
+            f"oven.vstore {vector}, {ptr}, {offset}, {size} : ({vector_type}, {ptr_type}, i32)"
+        )
+
     def add_gpu_smem_store(
         self, value: str, smem_ptr: str, offset: str, value_type: str = "f32"
     ) -> None:

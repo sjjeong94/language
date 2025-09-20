@@ -129,8 +129,18 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             self.symbol_table[arg_name] = ssa_val
             self.symbol_types[arg_name] = arg_type
 
-        # Visit function body
-        for stmt in node.body:
+        # Visit function body (skip docstring)
+        for i, stmt in enumerate(node.body):
+            # Skip docstring (first statement if it's a string literal)
+            if (
+                i == 0
+                and isinstance(stmt, ast.Expr)
+                and isinstance(stmt.value, (ast.Str, ast.Constant))
+                and isinstance(
+                    getattr(stmt.value, "value", getattr(stmt.value, "s", None)), str
+                )
+            ):
+                continue
             self.visit(stmt)
 
         if is_gpu_kernel:
@@ -150,6 +160,8 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             "get_tid_y",
             "load",
             "store",
+            "vload",
+            "vstore",
             "smem",
             "barrier",
             "load_input_x",
@@ -180,6 +192,8 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                         if attr_name in [
                             "load",
                             "store",
+                            "vload",
+                            "vstore",
                             "smem",
                             "barrier",
                             "nvvm_read_ptx_sreg_ntid_x",
@@ -780,6 +794,42 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                 else:
                     self.mlir_generator.add_gpu_store(value_ssa, ptr_ssa, offset_ssa)
                 return value_ssa  # Return the stored value as SSA
+        elif func_name in ["vload", "oven_lang_vload"]:
+            # vload(ptr, offset, size)
+            if len(node.args) >= 3:
+                ptr_ssa = self.visit(node.args[0])
+                offset_ssa = self.visit(node.args[1])
+                # Size should be a constant integer
+                size_node = node.args[2]
+                if isinstance(size_node, ast.Constant):
+                    size = size_node.value
+                elif isinstance(size_node, ast.Num):  # Python < 3.8 compatibility
+                    size = size_node.n
+                else:
+                    raise ValueError("vload size parameter must be a constant integer")
+
+                ssa_val = self.mlir_generator.add_gpu_vload(ptr_ssa, offset_ssa, size)
+                self._track_ssa_type(ssa_val, f"vector<{size}xf32>")
+                return ssa_val
+        elif func_name in ["vstore", "oven_lang_vstore"]:
+            # vstore(vector, ptr, offset, size)
+            if len(node.args) >= 4:
+                vector_ssa = self.visit(node.args[0])
+                ptr_ssa = self.visit(node.args[1])
+                offset_ssa = self.visit(node.args[2])
+                # Size should be a constant integer
+                size_node = node.args[3]
+                if isinstance(size_node, ast.Constant):
+                    size = size_node.value
+                elif isinstance(size_node, ast.Num):  # Python < 3.8 compatibility
+                    size = size_node.n
+                else:
+                    raise ValueError("vstore size parameter must be a constant integer")
+
+                self.mlir_generator.add_gpu_vstore(
+                    vector_ssa, ptr_ssa, offset_ssa, size
+                )
+                return vector_ssa  # Return the vector value as SSA
         elif func_name == "__store_to_ptr":
             # __store_to_ptr(ptr, offset, value)
             if len(node.args) >= 3:
@@ -830,12 +880,32 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             # exp(value)
             if len(node.args) >= 1:
                 operand_ssa = self.visit(node.args[0])
-                return self.mlir_generator.add_math_exp(operand_ssa)
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_exp(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_exp(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
         elif func_name in ["sigmoid", "oven_lang_sigmoid"]:
             # sigmoid(value)
             if len(node.args) >= 1:
                 operand_ssa = self.visit(node.args[0])
-                return self.mlir_generator.add_oven_sigmoid(operand_ssa)
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_oven_sigmoid(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_oven_sigmoid(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
         # Handle arithmetic function calls
         elif func_name in ["muli", "oven_lang_muli"]:
             # muli(a, b)
@@ -935,6 +1005,41 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         # Get types of the operands
         left_type = self._infer_type_from_ssa(left_ssa)
         right_type = self._infer_type_from_ssa(right_ssa)
+
+        # Check if either operand is a vector type
+        is_vector_op = (left_type and "vector<" in str(left_type)) or (
+            right_type and "vector<" in str(right_type)
+        )
+
+        if is_vector_op:
+            # Extract vector type info
+            vector_type = (
+                left_type if left_type and "vector<" in str(left_type) else right_type
+            )
+
+            # Generate vector arithmetic operation
+            if op == "add":
+                ssa_val = self.mlir_generator.add_arith_addf(
+                    left_ssa, right_ssa, vector_type
+                )
+            elif op == "mul":
+                ssa_val = self.mlir_generator.add_arith_mulf(
+                    left_ssa, right_ssa, vector_type
+                )
+            elif op == "sub":
+                ssa_val = self.mlir_generator.add_arith_subf(
+                    left_ssa, right_ssa, vector_type
+                )
+            elif op == "div":
+                ssa_val = self.mlir_generator.add_arith_divf(
+                    left_ssa, right_ssa, vector_type
+                )
+            else:
+                ssa_val = self.mlir_generator.add_constant_int(0)
+
+            # Track the result type as vector
+            self._track_ssa_type(ssa_val, vector_type)
+            return ssa_val
 
         # Determine if we should use float operations
         if force_float:

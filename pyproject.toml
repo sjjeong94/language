@@ -1,19 +1,20 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "oven-compiler"
-version = "0.1.0"
-description = "Python to MLIR compiler with GPU and mathematical operation support"
+version = "0.1.1"
+description = "Python-to-MLIR compiler for GPU kernel development and mathematical computing"
 readme = "README.md"
-license = "MIT"
+license = {file = "LICENSE"}
 authors = [
     {name = "Sinjin Jeong", email = "sjjeong94@gmail.com"}
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -22,8 +23,10 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Compilers",
     "Topic :: Scientific/Engineering",
+    "Topic :: System :: Hardware",
+    "Topic :: Software Development :: Code Generators",
 ]
-keywords = ["mlir", "compiler", "gpu", "python"]
+keywords = ["mlir", "compiler", "gpu", "python", "cuda", "kernel", "vectorization", "mathematical-computing", "llvm"]
 requires-python = ">=3.8"
 dependencies = []
 
