@@ -5,7 +5,7 @@ This module generates MLIR code from Python AST nodes.
 Provides utilities for creating MLIR operations, blocks, and functions.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 
 class MLIRGenerator:
@@ -240,7 +240,7 @@ class MLIRGenerator:
         return ssa_val
 
     def add_phi_node(
-        self, values_and_blocks: List[tuple], result_type: str = "i32"
+        self, values_and_blocks: List[Tuple[Any, Any]], result_type: str = "i32"
     ) -> str:
         """Add a phi node for SSA form."""
         ssa_val = self.get_next_ssa_value()

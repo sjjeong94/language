@@ -278,7 +278,7 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
         # Default fallback
         return "i32"
 
-    def _get_argument_types(self, node: ast.FunctionDef) -> list[str]:
+    def _get_argument_types(self, node: ast.FunctionDef) -> List[str]:
         """Get argument types from type annotations or infer from context."""
         arg_types = []
 
