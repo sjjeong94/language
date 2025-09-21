@@ -1,5 +1,5 @@
 """
-Command Line Interface for Oven Compiler
+Command Line Interface for Oven Language
 
 Provides CLI commands for compiling Python to MLIR.
 """
@@ -13,8 +13,8 @@ from typing import Optional
 from .compiler import PythonToMLIRCompiler
 
 
-def compile_command(args):
-    """Handle the compile command."""
+def compile_file_command(args):
+    """Handle direct file compilation."""
     input_file = args.input_file
     output_file = args.output_file
     debug = args.debug
@@ -56,22 +56,22 @@ def version_command(args):
     """Handle the version command."""
     from . import __version__
 
-    print(f"Oven Compiler version {__version__}")
+    print(f"Oven Language version {__version__}")
 
 
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         prog="oven",
-        description="Oven Compiler - Python to MLIR compilation",
+        description="Oven Language - Python to MLIR compilation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  oven compile kernel.py                 # Compile kernel.py to kernel.mlir
-  oven compile kernel.py -o output.mlir  # Specify output file
-  oven compile kernel.py --debug         # Enable debug output
-  oven compile kernel.py --optimize      # Enable optimization
-  oven --version                         # Show version
+  oven kernel.py                 # Compile kernel.py to kernel.mlir
+  oven kernel.py -o output.mlir  # Specify output file
+  oven kernel.py --debug         # Enable debug output
+  oven kernel.py --optimize      # Enable optimization
+  oven --version                 # Show version
         """,
     )
 
@@ -79,26 +79,20 @@ Examples:
         "--version", action="store_true", help="Show version information"
     )
 
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    parser.add_argument("input_file", nargs="?", help="Input Python file to compile")
 
-    # Compile command
-    compile_parser = subparsers.add_parser(
-        "compile", help="Compile Python file to MLIR"
-    )
-    compile_parser.add_argument("input_file", help="Input Python file to compile")
-    compile_parser.add_argument(
+    parser.add_argument(
         "-o",
         "--output",
         dest="output_file",
         help="Output MLIR file (default: input_file.mlir)",
     )
-    compile_parser.add_argument(
-        "--debug", action="store_true", help="Enable debug output"
-    )
-    compile_parser.add_argument(
+
+    parser.add_argument("--debug", action="store_true", help="Enable debug output")
+
+    parser.add_argument(
         "--optimize", action="store_true", help="Enable optimization passes"
     )
-    compile_parser.set_defaults(func=compile_command)
 
     # Parse arguments
     args = parser.parse_args()
@@ -108,9 +102,9 @@ Examples:
         version_command(args)
         return
 
-    # Handle commands
-    if hasattr(args, "func"):
-        args.func(args)
+    # Handle file compilation
+    if args.input_file:
+        compile_file_command(args)
     else:
         parser.print_help()
 

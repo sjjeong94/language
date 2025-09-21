@@ -1,7 +1,7 @@
 """
 Main entry point for oven package when run as module.
 
-This allows running: python -m oven compile kernel.py
+This allows running: python -m oven kernel.py
 """
 
 from .cli import main

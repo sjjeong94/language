@@ -44,9 +44,9 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/sjjeong94/language"
-Repository = "https://github.com/sjjeong94/language"
-Issues = "https://github.com/sjjeong94/language/issues"
+Homepage = "https://github.com/sjjeong94/oven-language"
+Repository = "https://github.com/sjjeong94/oven-language"
+Issues = "https://github.com/sjjeong94/oven-language/issues"
 
 [project.scripts]
 oven = "oven.cli:main"

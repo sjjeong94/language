@@ -1,0 +1,36 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run Black (code formatting check)
+        run: |
+          black --check --diff oven/ tests/
+
+      - name: Run Flake8 (linting)
+        run: |
+          flake8 oven/ tests/ --max-line-length=88 --ignore=E203,W503
+
+      - name: Run MyPy (type checking)
+        run: |
+          mypy oven/ --ignore-missing-imports
