@@ -2,7 +2,7 @@
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyPI version](https://badge.fury.io/py/oven-compiler.svg)](https://badge.fury.io/py/oven-compiler)
+[![PyPI version](https://badge.fury.io/py/oven-language.svg)](https://badge.fury.io/py/oven-language)
 
 A Python-to-MLIR compiler that enables GPU kernel development and mathematical computing with high-level Python syntax.
 
@@ -18,7 +18,7 @@ A Python-to-MLIR compiler that enables GPU kernel development and mathematical c
 ## Installation
 
 ```bash
-pip install oven-compiler
+pip install oven-language
 ```
 
 ## Quick Start
@@ -161,7 +161,7 @@ pytest --cov=oven --cov-report=html
 ### Project Structure
 
 ```
-oven-compiler/
+oven-language/
 ├── oven/                    # Main package
 │   ├── language.py          # GPU and math function definitions
 │   ├── compiler.py          # Main compiler interface
@@ -196,6 +196,6 @@ MIT License. See [LICENSE](LICENSE) file for details.
 ## Links
 
 - **Documentation**: [Complete API Documentation](docs/OVEN_LANGUAGE_API.md)
-- **GitHub**: [https://github.com/sjjeong94/language](https://github.com/sjjeong94/language)
-- **PyPI**: [https://pypi.org/project/oven-compiler/](https://pypi.org/project/oven-compiler/)
+- **GitHub**: [https://github.com/sjjeong94/oven-language](https://github.com/sjjeong94/oven-language)
+- **PyPI**: [https://pypi.org/project/oven-language/](https://pypi.org/project/oven-language/)
 - **Issues**: [GitHub Issues](https://github.com/sjjeong94/language/issues)
