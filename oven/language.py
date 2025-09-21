@@ -198,6 +198,26 @@ def log(x):
     raise NotImplementedError("This function is compiled to MLIR operations")
 
 
+def abs(x):
+    """Compute the absolute value."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def ceil(x):
+    """Compute the ceiling function (smallest integer >= x)."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def floor(x):
+    """Compute the floor function (largest integer <= x)."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def rsqrt(x):
+    """Compute the reciprocal square root (1/sqrt(x))."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
 # NVIDIA Intrinsics (for compatibility with existing code)
 def nvvm_read_ptx_sreg_ntid_x():
     """NVIDIA intrinsic: Read block dimension X."""

@@ -1,100 +1,106 @@
-# Oven Language 빠른 참조 가이드
+# Oven Language Quick Reference Guide
 
-## 가져오기
+## Import
 ```python
 import oven.language as ol
 ```
 
-## 타입 힌트
+## Type Hints
 ```python
-ol.ptr     # 포인터 타입 (!llvm.ptr)
-ol.f32     # 32비트 부동소수점 (f32)
-ol.i32     # 32비트 정수 (i32)
-ol.index   # 인덱스 타입 (index)
+ol.ptr     # Pointer type (!llvm.ptr)
+ol.f32     # 32-bit floating point (f32)
+ol.i32     # 32-bit integer (i32)
+ol.index   # Index type (index)
 ```
 
-## GPU 메모리
+## GPU Memory
 ```python
-ol.load(ptr, offset)          # 메모리에서 로드
-ol.store(value, ptr, offset)  # 메모리에 저장
-ol.smem()                     # 공유 메모리 할당
+ol.load(ptr, offset)          # Load from memory
+ol.store(value, ptr, offset)  # Store to memory
+ol.smem()                     # Allocate shared memory
 ```
 
-## GPU 스레드 정보
+## GPU Thread Information
 ```python
-ol.get_tid_x()    # 스레드 ID (X)
-ol.get_tid_y()    # 스레드 ID (Y)
-ol.get_bid_x()    # 블록 ID (X)
-ol.get_bid_y()    # 블록 ID (Y)
-ol.get_bdim_x()   # 블록 크기 (X)
-ol.barrier()      # 스레드 동기화
+ol.get_tid_x()    # Thread ID (X)
+ol.get_tid_y()    # Thread ID (Y)
+ol.get_bid_x()    # Block ID (X)
+ol.get_bid_y()    # Block ID (Y)
+ol.get_bdim_x()   # Block size (X)
+ol.barrier()      # Thread synchronization
 ```
 
-## 수학 함수
+## Mathematical Functions
 ```python
-# 기본 함수
+# Basic functions
 ol.exp(x)      # e^x
 ol.log(x)      # ln(x)
 ol.sqrt(x)     # √x
 ol.sigmoid(x)  # 1/(1+e^(-x))
 
-# 삼각 함수
+# Trigonometric functions
 ol.sin(x)      # sin(x)
 ol.cos(x)      # cos(x)
 ol.tan(x)      # tan(x)
+
+# Additional math functions
+ol.abs(x)      # |x| (absolute value)
+ol.ceil(x)     # ⌈x⌉ (ceiling)
+ol.floor(x)    # ⌊x⌋ (floor)
+ol.rsqrt(x)    # 1/√x (reciprocal square root)
 ```
 
-## 산술 연산
+## Arithmetic Operations
 ```python
-# 정수 연산
-ol.muli(a, b)  # 정수 곱셈
-ol.addi(a, b)  # 정수 덧셈
+# Integer operations
+ol.muli(a, b)  # Integer multiplication
+ol.addi(a, b)  # Integer addition
 
-# 부동소수점 연산
-ol.mulf(a, b)  # 실수 곱셈
-ol.addf(a, b)  # 실수 덧셈
+# Floating-point operations
+ol.mulf(a, b)  # Float multiplication
+ol.addf(a, b)  # Float addition
 ```
 
-## 입출력
+## Input/Output
 ```python
-ol.load_input_x(index)       # 입력 x 버퍼에서 로드
-ol.load_input_y(index)       # 입력 y 버퍼에서 로드
-ol.store_output_x(val, idx)  # 출력 x 버퍼에 저장
-ol.store_output_y(val, idx)  # 출력 y 버퍼에 저장
+ol.load_input_x(index)       # Load from input x buffer
+ol.load_input_y(index)       # Load from input y buffer
+ol.store_output_x(val, idx)  # Store to output x buffer
+ol.store_output_y(val, idx)  # Store to output y buffer
 ```
 
-## 유틸리티
+## Utilities
 ```python
-ol.index_cast(val, from, to)  # 타입 변환
-ol.constant(value, type)      # 상수 생성
-ol.for_loop(start, end, step, body, init)  # 루프
-ol.yield_value(*values)       # yield
+ol.index_cast(val, from, to)  # Type conversion
+ol.constant(value, type)      # Create constant
+ol.for_loop(start, end, step, body, init)  # Loop
+ol.yield_value(*values)       # Yield
 ```
 
-## 예제: 간단한 GPU 커널
+## Example: Simple GPU Kernel
 ```python
 def vector_add(a: ol.ptr, b: ol.ptr, c: ol.ptr, n: int):
     idx = ol.get_tid_x() + ol.get_bid_x() * ol.get_bdim_x()
     a_val = ol.load(a, idx)
     b_val = ol.load(b, idx)
-    result = a_val + b_val  # Python 연산자도 사용 가능
+    result = a_val + b_val  # Python operators also available
     ol.store(result, c, idx)
 ```
 
-## 예제: 공유 메모리 사용
+## Example: Using Shared Memory
 ```python
 def shared_memory_example(data: ol.ptr, output: ol.ptr):
     tid = ol.get_tid_x()
     smem = ol.smem()
     
-    # 데이터를 공유 메모리로 로드
+    # Load data to shared memory
     value = ol.load(data, tid)
     ol.store(value, smem, tid)
     
-    # 동기화
+    # Synchronization
     ol.barrier()
     
-    # 공유 메모리에서 처리
+    # Process from shared memory
     shared_val = ol.load(smem, tid)
     result = ol.exp(shared_val)
     ol.store(result, output, tid)

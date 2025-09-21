@@ -906,6 +906,141 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                     result_ssa = self.mlir_generator.add_oven_sigmoid(operand_ssa)
                     self._track_ssa_type(result_ssa, "f32")
                 return result_ssa
+        elif func_name in ["sin", "oven_lang_sin"]:
+            # sin(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_sin(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_sin(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
+        elif func_name in ["cos", "oven_lang_cos"]:
+            # cos(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_cos(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_cos(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
+        elif func_name in ["tan", "oven_lang_tan"]:
+            # tan(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_tan(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_tan(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
+        elif func_name in ["sqrt", "oven_lang_sqrt"]:
+            # sqrt(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_sqrt(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_sqrt(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
+        elif func_name in ["log", "oven_lang_log"]:
+            # log(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_log(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_log(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
+        elif func_name in ["abs", "oven_lang_abs"]:
+            # abs(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_absf(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_absf(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
+        elif func_name in ["ceil", "oven_lang_ceil"]:
+            # ceil(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_ceil(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_ceil(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
+        elif func_name in ["floor", "oven_lang_floor"]:
+            # floor(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_floor(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_floor(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
+        elif func_name in ["rsqrt", "oven_lang_rsqrt"]:
+            # rsqrt(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_rsqrt(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_rsqrt(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
         # Handle arithmetic function calls
         elif func_name in ["muli", "oven_lang_muli"]:
             # muli(a, b)

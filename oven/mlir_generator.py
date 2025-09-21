@@ -392,6 +392,60 @@ class MLIRGenerator:
         self._emit(f"{ssa_val} = math.exp {operand} : {operand_type}")
         return ssa_val
 
+    def add_math_sin(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.sin operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.sin {operand} : {operand_type}")
+        return ssa_val
+
+    def add_math_cos(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.cos operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.cos {operand} : {operand_type}")
+        return ssa_val
+
+    def add_math_tan(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.tan operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.tan {operand} : {operand_type}")
+        return ssa_val
+
+    def add_math_sqrt(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.sqrt operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.sqrt {operand} : {operand_type}")
+        return ssa_val
+
+    def add_math_log(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.log operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.log {operand} : {operand_type}")
+        return ssa_val
+
+    def add_math_absf(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.absf operation (floating-point absolute value)."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.absf {operand} : {operand_type}")
+        return ssa_val
+
+    def add_math_ceil(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.ceil operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.ceil {operand} : {operand_type}")
+        return ssa_val
+
+    def add_math_floor(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.floor operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.floor {operand} : {operand_type}")
+        return ssa_val
+
+    def add_math_rsqrt(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.rsqrt operation (reciprocal square root)."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.rsqrt {operand} : {operand_type}")
+        return ssa_val
+
     def add_oven_sigmoid(self, operand: str, operand_type: str = "f32") -> str:
         """Add oven.sigmoid operation."""
         ssa_val = self.get_next_ssa_value()

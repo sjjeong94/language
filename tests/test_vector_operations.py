@@ -17,6 +17,58 @@ from oven.compiler import PythonToMLIRCompiler
 class TestVectorOperationCompilation:
     """Test vector operation specific compilation features."""
 
+    def test_new_math_functions_scalar(self, compiler):
+        """Test that new math functions work with scalars."""
+        source = """
+import oven.language as ol
+
+def test_new_math(x: float):
+    abs_val = ol.abs(x)
+    ceil_val = ol.ceil(x)
+    floor_val = ol.floor(x) 
+    rsqrt_val = ol.rsqrt(x)
+    sqrt_val = ol.sqrt(x)
+    return abs_val, ceil_val, floor_val, rsqrt_val, sqrt_val
+"""
+        mlir_code = compiler.compile_source(source)
+
+        # Check for math operations
+        assert "math.absf" in mlir_code
+        assert "math.ceil" in mlir_code
+        assert "math.floor" in mlir_code
+        assert "math.rsqrt" in mlir_code
+        assert "math.sqrt" in mlir_code
+
+    def test_new_math_functions_vectors(self, compiler):
+        """Test that new math functions work with vectors."""
+        source = """
+import oven.language as ol
+
+def test_vector_math():
+    ptr = ol.load_input_x(0)
+    vec = ol.vload(ptr, 0, 4)
+    
+    abs_vec = ol.abs(vec)
+    ceil_vec = ol.ceil(vec)
+    floor_vec = ol.floor(vec)
+    rsqrt_vec = ol.rsqrt(vec)
+    sqrt_vec = ol.sqrt(vec)
+    
+    ol.vstore(abs_vec, ptr, 0, 4)
+    ol.vstore(ceil_vec, ptr, 16, 4)
+    ol.vstore(floor_vec, ptr, 32, 4)
+    ol.vstore(rsqrt_vec, ptr, 48, 4)
+    ol.vstore(sqrt_vec, ptr, 64, 4)
+"""
+        mlir_code = compiler.compile_source(source)
+
+        # Check for vector math operations
+        assert "math.absf %3 : vector<4xf32>" in mlir_code
+        assert "math.ceil %3 : vector<4xf32>" in mlir_code
+        assert "math.floor %3 : vector<4xf32>" in mlir_code
+        assert "math.rsqrt %3 : vector<4xf32>" in mlir_code
+        assert "math.sqrt %3 : vector<4xf32>" in mlir_code
+
     def test_vload_operation(self, compiler):
         """Test that vload operation is correctly compiled."""
         source = """

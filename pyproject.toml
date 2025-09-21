@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oven-compiler"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python-to-MLIR compiler for GPU kernel development and mathematical computing"
 readme = "README.md"
 license = {file = "LICENSE"}
