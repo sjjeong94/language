@@ -570,10 +570,13 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
             # Generate SCF for loop
             loop_var = node.target.id
             if iter_args:
-                # Create list of (arg_name, init_value) pairs
+                # Reserve SSA value for iter_arg (will be used inside the loop)
+                iter_arg_ssa = self.mlir_generator.ssa_counter
+                self.mlir_generator.ssa_counter += 1  # Reserve this number
+
                 iter_arg_pairs = [
-                    (f"sum", iter_args[0])
-                ]  # Simplified - assume one accumulator
+                    (str(iter_arg_ssa), iter_args[0])  # Use reserved SSA counter
+                ]  # Use SSA naming convention
                 loop_ssa = self.mlir_generator.add_scf_for(
                     f"{loop_var}_index",
                     start_index,
@@ -599,17 +602,32 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
 
             # Set up accumulator variables as block arguments
             for i, var_name in enumerate(accum_vars):
-                # In SCF for, iter_args become block arguments with specific names
-                self.symbol_table[var_name] = (
-                    "%sum"  # Simplified - use %sum for accumulator
-                )
+                # In SCF for, iter_args become block arguments with SSA names
+                if iter_args:
+                    # Use the reserved SSA counter that was used for iter_arg
+                    self.symbol_table[var_name] = f"%{iter_arg_ssa}"
+                else:
+                    self.symbol_table[var_name] = f"%{var_name}"
 
             # Process loop body
             nested_loop_results = []  # Track results from nested loops
             accumulated_values = {}  # Track values for accumulator variables
+            nested_vars = set()  # Track variables defined inside nested loops
 
             for stmt in node.body:
                 if isinstance(stmt, ast.Assign):
+                    # Check if this assignment involves variables from nested loops
+                    if isinstance(stmt.value, ast.BinOp):
+                        # Check if the right operand is a nested loop variable
+                        right_var = None
+                        if isinstance(stmt.value.right, ast.Name):
+                            right_var = stmt.value.right.id
+
+                        # If the assignment uses a nested loop variable, skip it
+                        # because we already handled it when processing the nested loop
+                        if right_var and right_var in nested_vars:
+                            continue
+
                     result_ssa = self.visit(stmt.value)
                     for target in stmt.targets:
                         if isinstance(target, ast.Name):
@@ -618,11 +636,25 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                             if var_name in accum_vars:
                                 accumulated_values[var_name] = result_ssa
                 elif isinstance(stmt, ast.For):
+                    # Track variables assigned in this nested loop
+                    def find_nested_vars(nested_node):
+                        vars_in_nested = set()
+                        for nested_stmt in nested_node.body:
+                            if isinstance(nested_stmt, ast.Assign):
+                                for target in nested_stmt.targets:
+                                    if isinstance(target, ast.Name):
+                                        vars_in_nested.add(target.id)
+                        return vars_in_nested
+
+                    nested_loop_vars = find_nested_vars(stmt)
+                    nested_vars.update(nested_loop_vars)
+
                     # This is a nested for loop
                     result_ssa = self.visit(stmt)
                     if result_ssa:
                         nested_loop_results.append(result_ssa)
-                        # Update accumulator variables with this result
+                        # The nested loop result is already the updated accumulator value
+                        # No need to add it again - just update the symbol table
                         for var_name in accum_vars:
                             self.symbol_table[var_name] = result_ssa
                             accumulated_values[var_name] = result_ssa

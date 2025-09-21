@@ -88,7 +88,7 @@ def matmul_kernel(a_ptr, b_ptr, c_ptr, m, n, k):
 
     # Check for SCF for loop
     assert "scf.for" in mlir_output
-    assert "iter_args(%sum" in mlir_output
+    assert "iter_args(%" in mlir_output  # Check for SSA-style iter_args
     assert "scf.yield" in mlir_output
 
     # Check for proper type usage
