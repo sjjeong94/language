@@ -160,6 +160,19 @@ def exp(x):
     raise NotImplementedError("This function is compiled to MLIR operations")
 
 
+def exp2(x):
+    """
+    Compute the base-2 exponential function 2^x.
+
+    Args:
+        x: Input value
+
+    Returns:
+        2^x
+    """
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
 def sigmoid(x):
     """
     Compute the sigmoid function 1 / (1 + e^(-x)).
@@ -195,6 +208,11 @@ def sqrt(x):
 
 def log(x):
     """Compute the natural logarithm function."""
+    raise NotImplementedError("This function is compiled to MLIR operations")
+
+
+def log2(x):
+    """Compute the base-2 logarithm function."""
     raise NotImplementedError("This function is compiled to MLIR operations")
 
 

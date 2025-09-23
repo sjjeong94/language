@@ -221,7 +221,17 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
 
     def _is_math_function(self, node: ast.FunctionDef) -> bool:
         """Check if a function contains mathematical operations that need f32 types."""
-        math_functions = {"exp", "sigmoid", "sin", "cos", "tan", "sqrt", "log"}
+        math_functions = {
+            "exp",
+            "exp2",
+            "sigmoid",
+            "sin",
+            "cos",
+            "tan",
+            "sqrt",
+            "log",
+            "log2",
+        }
 
         class MathCallVisitor(ast.NodeVisitor):
             def __init__(self):
@@ -923,6 +933,21 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                     result_ssa = self.mlir_generator.add_math_exp(operand_ssa)
                     self._track_ssa_type(result_ssa, "f32")
                 return result_ssa
+        elif func_name in ["exp2", "oven_lang_exp2"]:
+            # exp2(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_exp2(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_exp2(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
         elif func_name in ["sigmoid", "oven_lang_sigmoid"]:
             # sigmoid(value)
             if len(node.args) >= 1:
@@ -1011,6 +1036,21 @@ class PythonToMLIRASTVisitor(ast.NodeVisitor):
                     self._track_ssa_type(result_ssa, operand_type)
                 else:
                     result_ssa = self.mlir_generator.add_math_log(operand_ssa)
+                    self._track_ssa_type(result_ssa, "f32")
+                return result_ssa
+        elif func_name in ["log2", "oven_lang_log2"]:
+            # log2(value)
+            if len(node.args) >= 1:
+                operand_ssa = self.visit(node.args[0])
+                # Get operand type for vector support
+                operand_type = self._infer_type_from_ssa(operand_ssa)
+                if operand_type and "vector<" in str(operand_type):
+                    result_ssa = self.mlir_generator.add_math_log2(
+                        operand_ssa, operand_type
+                    )
+                    self._track_ssa_type(result_ssa, operand_type)
+                else:
+                    result_ssa = self.mlir_generator.add_math_log2(operand_ssa)
                     self._track_ssa_type(result_ssa, "f32")
                 return result_ssa
         elif func_name in ["abs", "oven_lang_abs"]:

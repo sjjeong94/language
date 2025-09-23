@@ -392,6 +392,12 @@ class MLIRGenerator:
         self._emit(f"{ssa_val} = math.exp {operand} : {operand_type}")
         return ssa_val
 
+    def add_math_exp2(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.exp2 operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.exp2 {operand} : {operand_type}")
+        return ssa_val
+
     def add_math_sin(self, operand: str, operand_type: str = "f32") -> str:
         """Add math.sin operation."""
         ssa_val = self.get_next_ssa_value()
@@ -420,6 +426,12 @@ class MLIRGenerator:
         """Add math.log operation."""
         ssa_val = self.get_next_ssa_value()
         self._emit(f"{ssa_val} = math.log {operand} : {operand_type}")
+        return ssa_val
+
+    def add_math_log2(self, operand: str, operand_type: str = "f32") -> str:
+        """Add math.log2 operation."""
+        ssa_val = self.get_next_ssa_value()
+        self._emit(f"{ssa_val} = math.log2 {operand} : {operand_type}")
         return ssa_val
 
     def add_math_absf(self, operand: str, operand_type: str = "f32") -> str:

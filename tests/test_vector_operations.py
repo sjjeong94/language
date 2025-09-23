@@ -155,7 +155,7 @@ def vector_add_kernel(input1_ptr: ol.ptr, input2_ptr: ol.ptr, output_ptr: ol.ptr
         assert ": vector<4xf32>" in mlir_code
 
     def test_vector_math_functions(self, compiler):
-        """Test vector mathematical functions (sigmoid, exp)."""
+        """Test vector mathematical functions (sigmoid, exp, exp2, log2)."""
         source = """
 import oven.language as ol
 
@@ -170,6 +170,8 @@ def vector_math_kernel(input_ptr: ol.ptr, output_ptr: ol.ptr):
     vector_data = ol.vload(input_ptr, offset, 4)
     vector_data = ol.sigmoid(vector_data)
     vector_data = ol.exp(vector_data)
+    vector_data = ol.exp2(vector_data)
+    vector_data = ol.log2(vector_data)
     ol.vstore(vector_data, output_ptr, offset, 4)
 """
         mlir_code = compiler.compile_source(source)
@@ -177,6 +179,8 @@ def vector_math_kernel(input_ptr: ol.ptr, output_ptr: ol.ptr):
         # Check for vector math functions with correct types
         assert "oven.sigmoid" in mlir_code
         assert "math.exp" in mlir_code
+        assert "math.exp2" in mlir_code
+        assert "math.log2" in mlir_code
         assert "vector<4xf32> -> vector<4xf32>" in mlir_code
         assert ": vector<4xf32>" in mlir_code
 
@@ -389,6 +393,68 @@ def coalesced_access(input_ptr: ol.ptr, output_ptr: ol.ptr):
         assert "arith.muli" in mlir_code  # offset calculation
         assert "oven.vload" in mlir_code
         assert "oven.vstore" in mlir_code
+
+    def test_exp2_log2_vector_operations(self, compiler):
+        """Test exp2 and log2 functions with vector operations."""
+        source = """
+import oven.language as ol
+
+def test_exp2_log2_vectors(input_ptr: ol.ptr, output_ptr: ol.ptr):
+    tid = ol.get_tid_x()
+    offset = tid * 4
+    
+    # Load vector data
+    vector_data = ol.vload(input_ptr, offset, 4)
+    
+    # Apply exp2 and log2 operations
+    vector_data = ol.exp2(vector_data)
+    vector_data = ol.log2(vector_data)
+    
+    # Store result
+    ol.vstore(vector_data, output_ptr, offset, 4)
+"""
+        mlir_code = compiler.compile_source(source)
+
+        # Check for vector exp2 and log2 operations
+        assert "math.exp2" in mlir_code
+        assert "math.log2" in mlir_code
+        assert ": vector<4xf32>" in mlir_code
+
+        # Check that operations are applied to vectors
+        assert "math.exp2 %" in mlir_code and "vector<4xf32>" in mlir_code
+        assert "math.log2 %" in mlir_code and "vector<4xf32>" in mlir_code
+
+    def test_combined_new_math_functions(self, compiler):
+        """Test combination of newly added math functions."""
+        source = """
+import oven.language as ol
+
+def test_combined_math(x_ptr: ol.ptr, y_ptr: ol.ptr):
+    tid = ol.get_tid_x()
+    offset = tid * 4
+    
+    # Load data
+    x = ol.vload(x_ptr, offset, 4)
+    
+    # Chain mathematical operations including new ones
+    x = ol.exp2(x)
+    x = ol.log2(x) 
+    x = ol.sqrt(x)
+    x = ol.rsqrt(x)
+    
+    # Store result
+    ol.vstore(x, y_ptr, offset, 4)
+"""
+        mlir_code = compiler.compile_source(source)
+
+        # Check all operations are present
+        assert "math.exp2" in mlir_code
+        assert "math.log2" in mlir_code
+        assert "math.sqrt" in mlir_code
+        assert "math.rsqrt" in mlir_code
+
+        # Check vector types
+        assert ": vector<4xf32>" in mlir_code
 
 
 if __name__ == "__main__":

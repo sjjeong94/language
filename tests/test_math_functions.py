@@ -145,6 +145,8 @@ def math_sigmoid(x):
         "math_func,expected_op",
         [
             ("exp", "math.exp"),
+            ("exp2", "math.exp2"),
+            ("log2", "math.log2"),
             ("sigmoid", "oven.sigmoid"),
         ],
     )
@@ -248,3 +250,59 @@ def nested_math(x):
         # Should have intermediate SSA values
         assert "%0 = math.exp" in mlir_code
         assert "%1 = oven.sigmoid %0" in mlir_code
+
+    def test_exp2_function(self, compiler):
+        """Test that exp2 function is correctly compiled."""
+        source = """
+def test_exp2(x):
+    result = exp2(x)
+    return result
+"""
+        mlir_code = compiler.compile_source(source)
+
+        # Check function signature uses f32 types
+        assert "func.func @test_exp2(%arg0: f32) -> f32" in mlir_code
+
+        # Check exp2 operation is present
+        assert "math.exp2 %arg0 : f32" in mlir_code
+
+        # Check return type is f32
+        assert "func.return %" in mlir_code and ": f32" in mlir_code
+
+    def test_log2_function(self, compiler):
+        """Test that log2 function is correctly compiled."""
+        source = """
+def test_log2(x):
+    result = log2(x)
+    return result
+"""
+        mlir_code = compiler.compile_source(source)
+
+        # Check function signature uses f32 types
+        assert "func.func @test_log2(%arg0: f32) -> f32" in mlir_code
+
+        # Check log2 operation is present
+        assert "math.log2 %arg0 : f32" in mlir_code
+
+        # Check return type is f32
+        assert "func.return %" in mlir_code and ": f32" in mlir_code
+
+    def test_exp2_log2_composition(self, compiler):
+        """Test composition of exp2 and log2 functions."""
+        source = """
+def test_exp2_log2(x):
+    a = exp2(x)
+    result = log2(a)
+    return result
+"""
+        mlir_code = compiler.compile_source(source)
+
+        # Check function signature uses f32 types
+        assert "func.func @test_exp2_log2(%arg0: f32) -> f32" in mlir_code
+
+        # Check both operations are present in sequence
+        assert "math.exp2 %arg0 : f32" in mlir_code
+        assert "math.log2" in mlir_code
+
+        # Should have intermediate SSA values
+        assert "%0 = math.exp2" in mlir_code
